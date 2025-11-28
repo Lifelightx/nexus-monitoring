@@ -1,0 +1,101 @@
+const Agent = require('../models/Agent');
+
+/**
+ * @swagger
+ * /api/agents/{agentId}/docker/control:
+ *   post:
+ *     summary: Control Docker container (start/stop/restart)
+ *     tags: [Docker]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: agentId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Agent ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - action
+ *               - containerId
+ *             properties:
+ *               action:
+ *                 type: string
+ *                 enum: [start, stop, restart]
+ *               containerId:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Control command sent successfully
+ *       400:
+ *         description: Invalid request
+ *       404:
+ *         description: Agent not found or offline
+ */
+const controlDockerContainer = async (req, res) => {
+    try {
+        const { agentId } = req.params;
+        const { action, containerId } = req.body;
+
+        // Validate action
+        if (!['start', 'stop', 'restart'].includes(action)) {
+            return res.status(400).json({ message: 'Invalid action. Must be start, stop, or restart' });
+        }
+
+        if (!containerId) {
+            return res.status(400).json({ message: 'Container ID is required' });
+        }
+
+        // Check if agent exists and is online
+        const agent = await Agent.findById(agentId);
+        if (!agent) {
+            return res.status(404).json({ message: 'Agent not found' });
+        }
+
+        if (agent.status !== 'online') {
+            return res.status(400).json({ message: 'Agent is offline' });
+        }
+
+        // Get socket.io instance from app
+        const io = req.app.get('io');
+        if (!io) {
+            return res.status(500).json({ message: 'Socket.IO not available' });
+        }
+
+        // Find the agent's socket connection
+        const agentSockets = req.app.get('agentSockets') || new Map();
+        const socketId = agentSockets.get(agentId.toString());
+
+        if (!socketId) {
+            return res.status(400).json({ message: 'Agent socket connection not found' });
+        }
+
+        // Send control command to agent
+        io.to(socketId).emit('docker:control', {
+            action,
+            containerId
+        });
+
+        res.json({
+            success: true,
+            message: `${action} command sent to agent`,
+            agentId,
+            containerId,
+            action
+        });
+
+    } catch (error) {
+        console.error('Error controlling Docker container:', error);
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
+module.exports = {
+    controlDockerContainer
+};
