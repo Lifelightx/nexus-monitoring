@@ -14,7 +14,7 @@ const DockerDetails = ({ dockerData, agentName, serverId: propServerId }) => {
     const [localDockerData, setLocalDockerData] = useState(dockerData || location.state?.dockerData);
     const [localAgentName, setLocalAgentName] = useState(agentName || location.state?.agentName);
     const [selectedContainer, setSelectedContainer] = useState(null);
-    const [activeTab, setActiveTab] = useState('containers');
+    const [activeTab, setActiveTab] = useState(location.state?.activeTab || 'containers');
     const [activeActionMenu, setActiveActionMenu] = useState(null);
     const [loadingAction, setLoadingAction] = useState(null); // {containerId, action}
 

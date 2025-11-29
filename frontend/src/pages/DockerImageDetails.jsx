@@ -16,6 +16,7 @@ const DockerImageDetails = ({ dockerData: propDockerData, agentName: propAgentNa
     const [localAgentName, setLocalAgentName] = useState(propAgentName || location.state?.agentName);
     const [loadingAction, setLoadingAction] = useState(null); // {containerId, action} or {imageId, action}
     const [notification, setNotification] = useState(null);
+    const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
 
     const socket = useSocket();
 
@@ -43,7 +44,7 @@ const DockerImageDetails = ({ dockerData: propDockerData, agentName: propAgentNa
                         // Navigate back to docker details on successful image deletion
                         setTimeout(() => {
                             navigate(`/server/${serverId}/docker-details`, {
-                                state: { dockerData: localDockerData, agentName: localAgentName }
+                                state: { dockerData: localDockerData, agentName: localAgentName, activeTab: 'images' }
                             });
                         }, 1500);
                     }
@@ -139,6 +140,13 @@ const DockerImageDetails = ({ dockerData: propDockerData, agentName: propAgentNa
         });
     };
 
+    const handleDeleteAll = () => {
+        stoppedContainers.forEach(c => {
+            handleDockerControl(c.id, 'remove');
+        });
+        setShowDeleteAllModal(false);
+    };
+
     return (
         <div className="min-h-screen bg-bg-dark text-white p-4 md:p-8 pt-20">
             <div className="max-w-7xl mx-auto">
@@ -151,7 +159,7 @@ const DockerImageDetails = ({ dockerData: propDockerData, agentName: propAgentNa
 
                 <div className="mb-8">
                     <button
-                        onClick={() => navigate(`/server/${serverId}/docker-details`, { state: { dockerData: localDockerData, agentName: localAgentName } })}
+                        onClick={() => navigate(`/server/${serverId}/docker-details`, { state: { dockerData: localDockerData, agentName: localAgentName, activeTab: 'images' } })}
                         className="mb-4 flex items-center gap-2 text-accent hover:text-white transition-colors"
                     >
                         <i className="fas fa-arrow-left"></i> Back to Docker Details
@@ -167,17 +175,30 @@ const DockerImageDetails = ({ dockerData: propDockerData, agentName: propAgentNa
                             </p>
                         </div>
                         <div className="flex gap-3">
-                            {runningContainers.length > 0 && (
+                            {runningContainers.length > 0 ? (
                                 <button
                                     onClick={handleStopAll}
                                     className="px-4 py-2 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white transition-all border border-red-500/20"
                                 >
                                     <i className="fas fa-stop-circle mr-2"></i> Stop All
                                 </button>
-                            )}
+                            ) : stoppedContainers.length > 0 ? (
+                                <button
+                                    onClick={() => setShowDeleteAllModal(true)}
+                                    className="px-4 py-2 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white transition-all border border-red-500/20"
+                                >
+                                    <i className="fas fa-trash-alt mr-2"></i> Delete All
+                                </button>
+                            ) : null}
+
                             <button
                                 onClick={() => handleImageControl('removeImage')}
-                                className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-all shadow-lg shadow-red-600/20"
+                                disabled={imageContainers.length > 0}
+                                className={`px-4 py-2 rounded-lg transition-all shadow-lg ${imageContainers.length > 0
+                                    ? 'bg-gray-600 text-gray-400 cursor-not-allowed opacity-50'
+                                    : 'bg-red-600 text-white hover:bg-red-700 shadow-red-600/20'
+                                    }`}
+                                title={imageContainers.length > 0 ? "Remove all containers first" : "Delete Image"}
                             >
                                 <i className="fas fa-trash mr-2"></i> Delete Image
                             </button>
@@ -216,23 +237,37 @@ const DockerImageDetails = ({ dockerData: propDockerData, agentName: propAgentNa
                                                 </span>
                                             </td>
                                             <td className="p-3">
-                                                {container.state === 'running' ? (
+                                                <div className="flex items-center gap-2">
+                                                    {container.state === 'running' ? (
+                                                        <button
+                                                            onClick={() => handleDockerControl(container.id, 'stop')}
+                                                            className="p-2 bg-red-500/10 text-red-400 rounded hover:bg-red-500 hover:text-white transition-colors"
+                                                            title="Stop"
+                                                        >
+                                                            <i className="fas fa-stop"></i>
+                                                        </button>
+                                                    ) : (
+                                                        <button
+                                                            onClick={() => handleDockerControl(container.id, 'start')}
+                                                            className="p-2 bg-green-500/10 text-green-400 rounded hover:bg-green-500 hover:text-white transition-colors"
+                                                            title="Start"
+                                                        >
+                                                            <i className="fas fa-play"></i>
+                                                        </button>
+                                                    )}
+
                                                     <button
-                                                        onClick={() => handleDockerControl(container.id, 'stop')}
-                                                        className="p-2 bg-red-500/10 text-red-400 rounded hover:bg-red-500 hover:text-white transition-colors"
-                                                        title="Stop"
+                                                        onClick={() => handleDockerControl(container.id, 'remove')}
+                                                        disabled={container.state === 'running'}
+                                                        className={`p-2 rounded transition-colors ${container.state === 'running'
+                                                            ? 'bg-white/5 text-white/20 cursor-not-allowed'
+                                                            : 'bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white'
+                                                            }`}
+                                                        title={container.state === 'running' ? "Stop container first" : "Delete"}
                                                     >
-                                                        <i className="fas fa-stop"></i>
+                                                        <i className="fas fa-trash"></i>
                                                     </button>
-                                                ) : (
-                                                    <button
-                                                        onClick={() => handleDockerControl(container.id, 'start')}
-                                                        className="p-2 bg-green-500/10 text-green-400 rounded hover:bg-green-500 hover:text-white transition-colors"
-                                                        title="Start"
-                                                    >
-                                                        <i className="fas fa-play"></i>
-                                                    </button>
-                                                )}
+                                                </div>
                                             </td>
                                         </tr>
                                     ))}
@@ -242,7 +277,43 @@ const DockerImageDetails = ({ dockerData: propDockerData, agentName: propAgentNa
                     )}
                 </div>
             </div>
-        </div>
+
+
+            {/* Delete All Confirmation Modal */}
+            {
+                showDeleteAllModal && (
+                    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4" onClick={() => setShowDeleteAllModal(false)}>
+                        <div className="glass max-w-md w-full rounded-xl p-6 border border-red-500/30" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center gap-4 mb-4 text-red-400">
+                                <div className="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center">
+                                    <i className="fas fa-exclamation-triangle text-xl"></i>
+                                </div>
+                                <h3 className="text-xl font-bold">Delete All Containers?</h3>
+                            </div>
+
+                            <p className="text-text-secondary mb-6">
+                                Are you sure you want to delete all {stoppedContainers.length} stopped containers? This action cannot be undone.
+                            </p>
+
+                            <div className="flex justify-end gap-3">
+                                <button
+                                    onClick={() => setShowDeleteAllModal(false)}
+                                    className="px-4 py-2 rounded-lg text-text-secondary hover:text-white hover:bg-white/5 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleDeleteAll}
+                                    className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors shadow-lg shadow-red-600/20"
+                                >
+                                    Delete All
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
+        </div >
     );
 };
 
