@@ -9,6 +9,7 @@ async function collectSystemMetrics() {
         const cpuLoad = await si.currentLoad();
         const mem = await si.mem();
         const networkStats = await si.networkStats();
+        const time = si.time();
 
         return {
             cpu: {
@@ -28,7 +29,8 @@ async function collectSystemMetrics() {
                 tx_bytes: iface.tx_bytes,
                 rx_sec: iface.rx_sec,
                 tx_sec: iface.tx_sec,
-            }))
+            })),
+            uptime: time.uptime
         };
     } catch (error) {
         console.error('Error collecting system metrics:', error);

@@ -10,9 +10,14 @@ const authRoutes = require('./routes/authRoutes');
 const agentRoutes = require('./routes/agentRoutes');
 const dockerRoutes = require('./routes/dockerRoutes');
 const socketHandler = require('./socket');
+const logger = require('./utils/logger');
+
+const seedAdminUser = require('./utils/seeder');
 
 dotenv.config();
-connectDB();
+connectDB().then(() => {
+    seedAdminUser();
+});
 
 const app = express();
 const server = http.createServer(app);
@@ -40,6 +45,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpecs));
 app.use('/api/auth', authRoutes);
 app.use('/api/agents', agentRoutes);
 app.use('/api/agents', dockerRoutes);
+app.use('/api/install', require('./routes/installRoutes'));
 
 app.get('/', (req, res) => {
     res.json({ message: 'Nexus Monitor API is running', docs: '/api-docs' });
@@ -49,6 +55,6 @@ app.get('/', (req, res) => {
 socketHandler(io, app);
 
 server.listen(port, () => {
-    console.log(`Server running at http://localhost:${port}`);
-    console.log(`Documentation available at http://localhost:${port}/api-docs`);
+    logger.info(`Server running at http://localhost:${port}`);
+    logger.info(`Documentation available at http://localhost:${port}/api-docs`);
 });

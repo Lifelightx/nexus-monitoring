@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
-import { io } from 'socket.io-client';
+import { useSocket } from '../context/SocketContext';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 const ServerDetails = () => {
@@ -12,11 +12,12 @@ const ServerDetails = () => {
     const [history, setHistory] = useState([]);
     const [dockerDetails, setDockerDetails] = useState(null);
 
-    useEffect(() => {
-        // If we don't have agent data from state, we might want to fetch it (omitted for brevity, relying on state or socket)
-        const socket = io('http://localhost:3000');
+    const socket = useSocket();
 
-        socket.on('dashboard:update', (data) => {
+    useEffect(() => {
+        if (!socket) return;
+
+        const handleUpdate = (data) => {
             if (data.agentId === id || (agent && data.agent === agent.name)) {
                 setMetrics(data);
                 if (data.dockerDetails) {
@@ -37,10 +38,14 @@ const ServerDetails = () => {
                     return newHistory.slice(-20);
                 });
             }
-        });
+        };
 
-        return () => socket.disconnect();
-    }, [id, agent]);
+        socket.on('dashboard:update', handleUpdate);
+
+        return () => {
+            socket.off('dashboard:update', handleUpdate);
+        };
+    }, [id, agent, socket]);
 
     if (!metrics && !agent) {
         return (
@@ -67,7 +72,15 @@ const ServerDetails = () => {
                             {metrics ? 'Live' : 'Offline'}
                         </span>
                     </h1>
-                    <p className="text-sm text-text-secondary">Server ID: {id}</p>
+                    <div className="flex items-center gap-4 text-sm text-text-secondary mt-1">
+                        <p>Server ID: {id}</p>
+                        {metrics?.uptime && (
+                            <>
+                                <span className="w-1 h-1 rounded-full bg-white/20"></span>
+                                <p>Uptime: {Math.floor(metrics.uptime / 3600)}h {Math.floor((metrics.uptime % 3600) / 60)}m</p>
+                            </>
+                        )}
+                    </div>
                 </div>
             </div>
 
@@ -148,7 +161,7 @@ const ServerDetails = () => {
                             </h3>
                             {dockerDetails && (
                                 <button
-                                    onClick={() => navigate('/docker-details', {
+                                    onClick={() => navigate(`/server/${id}/docker-details`, {
                                         state: {
                                             dockerData: dockerDetails,
                                             agentName: agent?.name || metrics?.agent,

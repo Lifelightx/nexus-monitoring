@@ -79,6 +79,7 @@ async function collectDockerData() {
             virtualSize: img.virtualSize || 0,
             author: img.author,
             created: img.created,
+            repoTags: img.repoTags,
             containerConfig: img.containerConfig,
             config: img.config
         }));

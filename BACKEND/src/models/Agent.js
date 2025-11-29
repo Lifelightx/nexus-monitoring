@@ -11,6 +11,7 @@ const agentSchema = new mongoose.Schema({
     distro: String,
     release: String,
     ip: String,
+    uptime: Number,
     status: {
         type: String,
         enum: ['online', 'offline'],

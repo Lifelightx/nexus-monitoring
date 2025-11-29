@@ -1,0 +1,249 @@
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation, useParams } from 'react-router-dom';
+import axios from 'axios';
+import { useSocket } from '../context/SocketContext';
+
+const DockerImageDetails = ({ dockerData: propDockerData, agentName: propAgentName, serverId: propServerId }) => {
+    const navigate = useNavigate();
+    const location = useLocation();
+    const { serverId: paramServerId, imageName: paramImageName } = useParams();
+
+    const serverId = propServerId || paramServerId || location.state?.agentId;
+    const imageName = decodeURIComponent(paramImageName || '');
+
+    // Local state
+    const [localDockerData, setLocalDockerData] = useState(propDockerData || location.state?.dockerData);
+    const [localAgentName, setLocalAgentName] = useState(propAgentName || location.state?.agentName);
+    const [loadingAction, setLoadingAction] = useState(null); // {containerId, action} or {imageId, action}
+    const [notification, setNotification] = useState(null);
+
+    const socket = useSocket();
+
+    // Socket listeners
+    useEffect(() => {
+        if (!socket) return;
+
+        const handleDashboardUpdate = (data) => {
+            if (data.agentId === serverId) {
+                if (data.dockerDetails) {
+                    setLocalDockerData(data.dockerDetails);
+                }
+                if (data.agent) {
+                    setLocalAgentName(data.agent);
+                }
+            }
+        };
+
+        const handleControlResult = (data) => {
+            if (loadingAction && (data.containerId === loadingAction.containerId || (data.action === 'removeImage'))) {
+                setLoadingAction(null);
+                if (data.success) {
+                    setNotification({ type: 'success', message: data.message });
+                    if (data.action === 'removeImage') {
+                        // Navigate back to docker details on successful image deletion
+                        setTimeout(() => {
+                            navigate(`/server/${serverId}/docker-details`, {
+                                state: { dockerData: localDockerData, agentName: localAgentName }
+                            });
+                        }, 1500);
+                    }
+                } else {
+                    setNotification({ type: 'error', message: data.message || 'Operation failed' });
+                }
+                setTimeout(() => setNotification(null), 5000);
+            }
+        };
+
+        socket.on('dashboard:update', handleDashboardUpdate);
+        socket.on('docker:control:result', handleControlResult);
+
+        return () => {
+            socket.off('dashboard:update', handleDashboardUpdate);
+            socket.off('docker:control:result', handleControlResult);
+        };
+    }, [loadingAction, serverId, socket, navigate, localDockerData, localAgentName]);
+
+    const handleDockerControl = async (containerId, action, payload = null) => {
+        if (!serverId) return;
+        setLoadingAction({ containerId, action });
+
+        try {
+            const token = localStorage.getItem('token');
+            await axios.post(
+                `http://localhost:3000/api/agents/${serverId}/docker/control`,
+                { action, containerId, payload },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+        } catch (error) {
+            console.error('Error controlling container:', error);
+            setLoadingAction(null);
+            setNotification({
+                type: 'error',
+                message: error.response?.data?.message || 'Failed to send command'
+            });
+        }
+    };
+
+    const handleImageControl = async (action) => {
+        if (!serverId) return;
+        // For image removal, we don't need a containerId, but the backend expects one or we need to adjust backend validation.
+        // The backend validation requires containerId for non-create actions.
+        // We might need to send a dummy containerId or update backend.
+        // However, looking at backend code: if (action !== 'create' && !containerId) return 400.
+        // So I need to update backend to allow removeImage without containerId.
+        // Or I can send a dummy containerId.
+
+        // Wait, I can't update backend easily if I don't want to restart it (though I should).
+        // Let's assume I will update backend too.
+
+        setLoadingAction({ imageId: imageName, action });
+
+        try {
+            const token = localStorage.getItem('token');
+            // Find image ID from name
+            const imageObj = localDockerData?.images?.find(img => img.repoTags?.includes(imageName));
+            const imageId = imageObj?.id;
+
+            if (!imageId && action === 'removeImage') {
+                setNotification({ type: 'error', message: 'Image ID not found' });
+                setLoadingAction(null);
+                return;
+            }
+
+            await axios.post(
+                `http://localhost:3000/api/agents/${serverId}/docker/control`,
+                { action, containerId: 'image-action', payload: { imageId } }, // Sending dummy containerId
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+        } catch (error) {
+            console.error('Error controlling image:', error);
+            setLoadingAction(null);
+            setNotification({
+                type: 'error',
+                message: error.response?.data?.message || 'Failed to send command'
+            });
+        }
+    };
+
+    if (!localDockerData) {
+        return <div className="min-h-screen bg-bg-dark text-white p-8 pt-20 flex justify-center">Loading...</div>;
+    }
+
+    const imageContainers = localDockerData.containers.filter(c => c.image === imageName);
+    const runningContainers = imageContainers.filter(c => c.state === 'running');
+    const stoppedContainers = imageContainers.filter(c => c.state !== 'running');
+
+    const handleStopAll = () => {
+        runningContainers.forEach(c => {
+            handleDockerControl(c.id, 'stop');
+        });
+    };
+
+    return (
+        <div className="min-h-screen bg-bg-dark text-white p-4 md:p-8 pt-20">
+            <div className="max-w-7xl mx-auto">
+                {notification && (
+                    <div className={`fixed top-24 right-8 p-4 rounded-xl shadow-2xl z-50 animate-slide-in border ${notification.type === 'success' ? 'bg-green-500/10 border-green-500/50 text-green-400' : 'bg-red-500/10 border-red-500/50 text-red-400'
+                        }`}>
+                        {notification.message}
+                    </div>
+                )}
+
+                <div className="mb-8">
+                    <button
+                        onClick={() => navigate(`/server/${serverId}/docker-details`, { state: { dockerData: localDockerData, agentName: localAgentName } })}
+                        className="mb-4 flex items-center gap-2 text-accent hover:text-white transition-colors"
+                    >
+                        <i className="fas fa-arrow-left"></i> Back to Docker Details
+                    </button>
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h1 className="text-3xl font-bold flex items-center gap-3">
+                                <i className="fas fa-layer-group text-blue-400"></i>
+                                {imageName}
+                            </h1>
+                            <p className="text-text-secondary mt-2">
+                                {imageContainers.length} Containers ({runningContainers.length} Running, {stoppedContainers.length} Stopped)
+                            </p>
+                        </div>
+                        <div className="flex gap-3">
+                            {runningContainers.length > 0 && (
+                                <button
+                                    onClick={handleStopAll}
+                                    className="px-4 py-2 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white transition-all border border-red-500/20"
+                                >
+                                    <i className="fas fa-stop-circle mr-2"></i> Stop All
+                                </button>
+                            )}
+                            <button
+                                onClick={() => handleImageControl('removeImage')}
+                                className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-all shadow-lg shadow-red-600/20"
+                            >
+                                <i className="fas fa-trash mr-2"></i> Delete Image
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="glass p-6 rounded-xl">
+                    <h2 className="text-xl font-bold mb-4">Containers</h2>
+                    {imageContainers.length === 0 ? (
+                        <p className="text-text-secondary">No containers found for this image.</p>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full">
+                                <thead>
+                                    <tr className="text-left text-text-secondary border-b border-white/10">
+                                        <th className="p-3">Status</th>
+                                        <th className="p-3">Name</th>
+                                        <th className="p-3">State</th>
+                                        <th className="p-3">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {imageContainers.map(container => (
+                                        <tr key={container.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                                            <td className="p-3">
+                                                <div className={`w-3 h-3 rounded-full ${container.state === 'running' ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                                            </td>
+                                            <td className="p-3 font-medium">
+                                                {container.name}
+                                                <div className="text-xs text-text-secondary font-mono mt-1">{container.id.substring(0, 12)}</div>
+                                            </td>
+                                            <td className="p-3">
+                                                <span className={`px-2 py-1 rounded text-xs ${container.state === 'running' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                                                    {container.state}
+                                                </span>
+                                            </td>
+                                            <td className="p-3">
+                                                {container.state === 'running' ? (
+                                                    <button
+                                                        onClick={() => handleDockerControl(container.id, 'stop')}
+                                                        className="p-2 bg-red-500/10 text-red-400 rounded hover:bg-red-500 hover:text-white transition-colors"
+                                                        title="Stop"
+                                                    >
+                                                        <i className="fas fa-stop"></i>
+                                                    </button>
+                                                ) : (
+                                                    <button
+                                                        onClick={() => handleDockerControl(container.id, 'start')}
+                                                        className="p-2 bg-green-500/10 text-green-400 rounded hover:bg-green-500 hover:text-white transition-colors"
+                                                        title="Start"
+                                                    >
+                                                        <i className="fas fa-play"></i>
+                                                    </button>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+export default DockerImageDetails;

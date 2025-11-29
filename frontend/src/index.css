@@ -31,7 +31,7 @@
 }
 
 body {
-  @apply bg-bg-dark text-text-primary;
+  @apply bg-bg-dark text-text-primary transition-colors duration-300;
 }
 
 /* Custom Scrollbar */

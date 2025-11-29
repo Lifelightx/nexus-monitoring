@@ -24,6 +24,7 @@ const metricSchema = new mongoose.Schema({
         rx_sec: Number,
         tx_sec: Number,
     }],
+    uptime: Number,
     docker: [{
         id: String,
         name: String,

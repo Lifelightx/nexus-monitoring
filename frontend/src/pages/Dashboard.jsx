@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import axios from 'axios';
 import InstallationGuide from '../components/dashboard/InstallationGuide';
+import AddServerModal from '../components/dashboard/AddServerModal';
 
 const Dashboard = () => {
     const { showGuide, setShowGuide } = useOutletContext();
+    const [showAddServerModal, setShowAddServerModal] = useState(false);
     const [agents, setAgents] = useState([]);
     const navigate = useNavigate();
 
@@ -29,11 +31,18 @@ const Dashboard = () => {
     return (
         <div>
             {showGuide && <InstallationGuide onClose={() => setShowGuide(false)} />}
+            {showAddServerModal && <AddServerModal onClose={() => setShowAddServerModal(false)} />}
 
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold text-white">Your Servers</h2>
-                <button className="bg-accent hover:bg-accent/80 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
-                    <i className="fas fa-plus"></i> Add Server
+                <button
+                    onClick={() => setShowAddServerModal(true)}
+                    className="backdrop-blur-xl bg-white/5 border border-white/10 hover:bg-white/10 text-white px-6 py-3 rounded-xl text-sm font-bold shadow-xl hover:shadow-2xl hover:-translate-y-0.5 transition-all flex items-center gap-2 group hover:border-accent/50"
+                >
+                    <div className="w-6 h-6 rounded-full bg-accent/20 flex items-center justify-center group-hover:bg-accent group-hover:text-white transition-colors">
+                        <i className="fas fa-plus text-accent text-xs group-hover:text-white"></i>
+                    </div>
+                    <span>Add Server</span>
                 </button>
             </div>
 
@@ -49,8 +58,8 @@ const Dashboard = () => {
                                 <i className={`fas fa-server text-xl ${agent.status === 'online' ? 'text-green-400' : 'text-red-400'}`}></i>
                             </div>
                             <span className={`px-2 py-1 rounded text-xs font-medium ${agent.status === 'online'
-                                    ? 'bg-green-500/10 text-green-400 border border-green-500/20'
-                                    : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                                ? 'bg-green-500/10 text-green-400 border border-green-500/20'
+                                : 'bg-red-500/10 text-red-400 border border-red-500/20'
                                 }`}>
                                 {agent.status === 'online' ? 'Online' : 'Offline'}
                             </span>

@@ -59,6 +59,37 @@ socket.on('docker:control', async (data) => {
             case 'restart':
                 command = `docker restart ${containerId}`;
                 break;
+            case 'create':
+                const { image, name, ports, env, restart, command: cmd } = data.payload;
+                let runCmd = `docker run -d`;
+                if (name) runCmd += ` --name ${name}`;
+                if (restart && restart !== 'no') runCmd += ` --restart ${restart}`;
+
+                if (ports) {
+                    ports.split(',').forEach(p => {
+                        const port = p.trim();
+                        if (port) runCmd += ` -p ${port}`;
+                    });
+                }
+
+                if (env) {
+                    env.split(',').forEach(e => {
+                        const envVar = e.trim();
+                        if (envVar) runCmd += ` -e ${envVar}`;
+                    });
+                }
+
+                runCmd += ` ${image}`;
+                if (cmd) runCmd += ` ${cmd}`;
+
+                command = runCmd;
+                break;
+            case 'remove':
+                command = `docker rm ${containerId}`;
+                break;
+            case 'removeImage':
+                command = `docker rmi ${data.payload.imageId}`;
+                break;
             default:
                 throw new Error(`Unknown action: ${action}`);
         }

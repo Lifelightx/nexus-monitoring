@@ -41,14 +41,14 @@ const Agent = require('../models/Agent');
 const controlDockerContainer = async (req, res) => {
     try {
         const { agentId } = req.params;
-        const { action, containerId } = req.body;
+        const { action, containerId, payload } = req.body;
 
         // Validate action
-        if (!['start', 'stop', 'restart'].includes(action)) {
-            return res.status(400).json({ message: 'Invalid action. Must be start, stop, or restart' });
+        if (!['start', 'stop', 'restart', 'create', 'remove', 'removeImage'].includes(action)) {
+            return res.status(400).json({ message: 'Invalid action. Must be start, stop, restart, create, remove, or removeImage' });
         }
 
-        if (!containerId) {
+        if (action !== 'create' && !containerId) {
             return res.status(400).json({ message: 'Container ID is required' });
         }
 
@@ -79,7 +79,8 @@ const controlDockerContainer = async (req, res) => {
         // Send control command to agent
         io.to(socketId).emit('docker:control', {
             action,
-            containerId
+            containerId,
+            payload
         });
 
         res.json({
