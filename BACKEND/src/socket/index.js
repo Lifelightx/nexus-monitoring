@@ -110,6 +110,44 @@ module.exports = (io, app) => {
             io.emit('docker:control:result', data);
         });
 
+        // --- Docker Logs & Terminal Forwarding (Agent -> Dashboard) ---
+        const forwardToDashboard = (event) => (data) => {
+            // We might want to include agentId if not present, but for now broadcast
+            // Ideally we should emit to specific room for that agent/container
+            io.emit(event, data);
+        };
+
+        socket.on('docker:logs:data', forwardToDashboard('docker:logs:data'));
+        socket.on('docker:logs:end', forwardToDashboard('docker:logs:end'));
+        socket.on('docker:logs:error', forwardToDashboard('docker:logs:error'));
+
+        socket.on('docker:terminal:data', forwardToDashboard('docker:terminal:data'));
+        socket.on('docker:terminal:exit', forwardToDashboard('docker:terminal:exit'));
+        socket.on('docker:terminal:error', forwardToDashboard('docker:terminal:error'));
+
+
+        // --- Docker Logs & Terminal Forwarding (Dashboard -> Agent) ---
+        const forwardToAgent = (event) => (data) => {
+            const { agentId } = data;
+            if (!agentId) return;
+
+            const agentSocketId = agentSockets.get(agentId);
+            if (agentSocketId) {
+                io.to(agentSocketId).emit(event, data);
+            } else {
+                // Agent not connected
+                socket.emit('error', { message: 'Agent not connected' });
+            }
+        };
+
+        socket.on('docker:logs:start', forwardToAgent('docker:logs:start'));
+        socket.on('docker:logs:stop', forwardToAgent('docker:logs:stop'));
+
+        socket.on('docker:terminal:start', forwardToAgent('docker:terminal:start'));
+        socket.on('docker:terminal:data', forwardToAgent('docker:terminal:data'));
+        socket.on('docker:terminal:resize', forwardToAgent('docker:terminal:resize'));
+        socket.on('docker:terminal:stop', forwardToAgent('docker:terminal:stop'));
+
         socket.on('disconnect', async () => {
             if (agents.has(socket.id)) {
                 const agentInfo = agents.get(socket.id);

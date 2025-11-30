@@ -260,7 +260,10 @@ const DockerDetails = ({ dockerData, agentName, serverId: propServerId }) => {
                 {/* Tabs */}
                 <div className="flex gap-2 mb-6">
                     <button
-                        onClick={() => setActiveTab('containers')}
+                        onClick={() => {
+                            setActiveTab('containers');
+                            navigate('.', { state: { ...location.state, activeTab: 'containers' }, replace: true });
+                        }}
                         className={`px-6 py-3 rounded-lg font-medium transition-all ${activeTab === 'containers'
                             ? 'bg-accent text-white'
                             : 'glass text-text-secondary hover:text-white'
@@ -270,7 +273,10 @@ const DockerDetails = ({ dockerData, agentName, serverId: propServerId }) => {
                         Containers ({containers.length})
                     </button>
                     <button
-                        onClick={() => setActiveTab('images')}
+                        onClick={() => {
+                            setActiveTab('images');
+                            navigate('.', { state: { ...location.state, activeTab: 'images' }, replace: true });
+                        }}
                         className={`px-6 py-3 rounded-lg font-medium transition-all ${activeTab === 'images'
                             ? 'bg-accent text-white'
                             : 'glass text-text-secondary hover:text-white'
@@ -280,7 +286,10 @@ const DockerDetails = ({ dockerData, agentName, serverId: propServerId }) => {
                         Images ({images.length})
                     </button>
                     <button
-                        onClick={() => setActiveTab('volumes')}
+                        onClick={() => {
+                            setActiveTab('volumes');
+                            navigate('.', { state: { ...location.state, activeTab: 'volumes' }, replace: true });
+                        }}
                         className={`px-6 py-3 rounded-lg font-medium transition-all ${activeTab === 'volumes'
                             ? 'bg-accent text-white'
                             : 'glass text-text-secondary hover:text-white'
@@ -631,6 +640,29 @@ const DockerDetails = ({ dockerData, agentName, serverId: propServerId }) => {
                                                                 <i className="fas fa-info-circle"></i>
                                                             </button>
 
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    if (container.state === 'running') {
+                                                                        navigate(`/server/${serverId}/docker-details/${container.id}`, {
+                                                                            state: {
+                                                                                containerName: container.name,
+                                                                                dockerData: localDockerData,
+                                                                                agentName: localAgentName
+                                                                            }
+                                                                        });
+                                                                    }
+                                                                }}
+                                                                disabled={container.state !== 'running'}
+                                                                className={`p-2 rounded transition-colors ${container.state === 'running'
+                                                                    ? 'bg-gray-500/10 text-gray-400 hover:bg-gray-500 hover:text-white'
+                                                                    : 'bg-gray-500/5 text-gray-600 cursor-not-allowed opacity-50'
+                                                                    }`}
+                                                                title={container.state === 'running' ? "Logs & Terminal" : "Start container to view logs/terminal"}
+                                                            >
+                                                                <i className="fas fa-terminal"></i>
+                                                            </button>
+
                                                             <div className="relative">
                                                                 <button
                                                                     onClick={(e) => {
@@ -654,7 +686,12 @@ const DockerDetails = ({ dockerData, agentName, serverId: propServerId }) => {
                                                                                     disabled={loadingAction?.containerId === container.id}
                                                                                     className="w-full text-left px-4 py-2 text-sm text-yellow-400 hover:bg-white/5 first:rounded-t-lg flex items-center gap-2"
                                                                                 >
-                                                                                    <i className="fas fa-sync w-4"></i> Restart
+                                                                                    {loadingAction?.containerId === container.id && loadingAction?.action === 'restart' ? (
+                                                                                        <i className="fas fa-spinner fa-spin w-4"></i>
+                                                                                    ) : (
+                                                                                        <i className="fas fa-sync w-4"></i>
+                                                                                    )}
+                                                                                    Restart
                                                                                 </button>
                                                                                 <button
                                                                                     onClick={(e) => {
@@ -665,7 +702,12 @@ const DockerDetails = ({ dockerData, agentName, serverId: propServerId }) => {
                                                                                     disabled={loadingAction?.containerId === container.id}
                                                                                     className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-white/5 last:rounded-b-lg flex items-center gap-2"
                                                                                 >
-                                                                                    <i className="fas fa-stop w-4"></i> Stop
+                                                                                    {loadingAction?.containerId === container.id && loadingAction?.action === 'stop' ? (
+                                                                                        <i className="fas fa-spinner fa-spin w-4"></i>
+                                                                                    ) : (
+                                                                                        <i className="fas fa-stop w-4"></i>
+                                                                                    )}
+                                                                                    Stop
                                                                                 </button>
                                                                             </>
                                                                         ) : (
@@ -678,7 +720,12 @@ const DockerDetails = ({ dockerData, agentName, serverId: propServerId }) => {
                                                                                 disabled={loadingAction?.containerId === container.id}
                                                                                 className="w-full text-left px-4 py-2 text-sm text-green-400 hover:bg-white/5 first:rounded-t-lg flex items-center gap-2"
                                                                             >
-                                                                                <i className="fas fa-play w-4"></i> Start
+                                                                                {loadingAction?.containerId === container.id && loadingAction?.action === 'start' ? (
+                                                                                    <i className="fas fa-spinner fa-spin w-4"></i>
+                                                                                ) : (
+                                                                                    <i className="fas fa-play w-4"></i>
+                                                                                )}
+                                                                                Start
                                                                             </button>
                                                                         )}
                                                                         {container.state !== 'running' && (
@@ -691,7 +738,12 @@ const DockerDetails = ({ dockerData, agentName, serverId: propServerId }) => {
                                                                                 disabled={loadingAction?.containerId === container.id}
                                                                                 className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-white/5 last:rounded-b-lg flex items-center gap-2 border-t border-white/5"
                                                                             >
-                                                                                <i className="fas fa-trash w-4"></i> Delete
+                                                                                {loadingAction?.containerId === container.id && loadingAction?.action === 'remove' ? (
+                                                                                    <i className="fas fa-spinner fa-spin w-4"></i>
+                                                                                ) : (
+                                                                                    <i className="fas fa-trash w-4"></i>
+                                                                                )}
+                                                                                Delete
                                                                             </button>
                                                                         )}
                                                                     </div>

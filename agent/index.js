@@ -26,6 +26,12 @@ socket.on('connect', async () => {
     const agentInfo = await collectAgentInfo(AGENT_NAME);
     socket.emit('agent:register', agentInfo);
 
+    // Send initial metrics
+    await sendMetrics();
+
+    // Start disk scan loop
+    startDiskScanLoop();
+
     // Start sending metrics
     startMetricsLoop();
 });
@@ -37,6 +43,15 @@ socket.on('disconnect', () => {
 socket.on('connect_error', (err) => {
     console.log('Connection error:', err.message);
 });
+
+const {
+    startLogs,
+    stopLogs,
+    startTerminal,
+    writeTerminal,
+    resizeTerminal,
+    stopTerminal
+} = require('./handlers/dockerHandler');
 
 // Handle Docker container control commands from server
 socket.on('docker:control', async (data) => {
@@ -122,6 +137,68 @@ socket.on('docker:control', async (data) => {
     }
 });
 
+// Docker Logs Events
+socket.on('docker:logs:start', ({ containerId }) => startLogs(socket, containerId));
+socket.on('docker:logs:stop', ({ containerId }) => stopLogs(containerId));
+
+// Docker Terminal Events
+socket.on('docker:terminal:start', ({ containerId }) => startTerminal(socket, containerId));
+socket.on('docker:terminal:data', ({ containerId, data }) => writeTerminal(containerId, data));
+socket.on('docker:terminal:resize', ({ containerId, cols, rows }) => resizeTerminal(containerId, cols, rows));
+socket.on('docker:terminal:stop', ({ containerId }) => stopTerminal(containerId));
+
+// Handle File System List command
+socket.on('system:fs:list', async (data) => {
+    const { path: rawPath, requestId } = data;
+    // Normalize path: if it's just "C:" or "D:", append "/" to ensure it treats it as root, not CWD
+    const path = rawPath.match(/^[A-Za-z]:$/) ? `${rawPath}/` : rawPath;
+
+    console.log(`Received FS list request for ${path} (raw: ${rawPath})`);
+
+    try {
+        const fs = require('fs/promises');
+        const { join } = require('path');
+
+        const items = await fs.readdir(path, { withFileTypes: true });
+
+        const fileList = items.map(item => ({
+            name: item.name,
+            type: item.isDirectory() ? 'folder' : 'file',
+            size: 0, // fs.readdir doesn't give size, need stat. For speed, we might skip or stat individual
+            path: join(path, item.name)
+        }));
+
+        // Get sizes for files (optional, might be slow for many files)
+        // For now, let's just return names/types for speed, or stat top 20?
+        // Let's try to stat all, but handle errors
+        for (const file of fileList) {
+            try {
+                if (file.type === 'file') {
+                    const stats = await fs.stat(file.path);
+                    file.size = stats.size;
+                }
+            } catch (e) {
+                // Ignore stat errors (permissions etc)
+            }
+        }
+
+        socket.emit('system:fs:list:result', {
+            requestId,
+            success: true,
+            path,
+            files: fileList
+        });
+    } catch (error) {
+        console.error('FS list failed:', error);
+        socket.emit('system:fs:list:result', {
+            requestId,
+            success: false,
+            path,
+            error: error.message
+        });
+    }
+});
+
 async function sendMetrics() {
     try {
         // Collect all metrics
@@ -152,6 +229,66 @@ async function sendMetrics() {
     }
 }
 
+
+
+async function runDiskScan() {
+    try {
+        const { scanDisk, collectSystemMetrics } = require('./collectors/systemCollector');
+        const axios = require('axios');
+        const crypto = require('crypto');
+
+        // Get mount points first
+        const metrics = await collectSystemMetrics();
+        if (!metrics || !metrics.disk) return;
+
+        // Initialize hash storage if not exists
+        if (!global.diskHashes) {
+            global.diskHashes = {};
+        }
+
+        // Scan each disk
+        for (const disk of metrics.disk) {
+            console.log(`Scanning disk: ${disk.mount}`);
+            const files = await scanDisk(disk.mount);
+
+            // Generate hash of the file list to detect changes
+            const currentHash = crypto.createHash('md5').update(JSON.stringify(files)).digest('hex');
+
+            if (global.diskHashes[disk.mount] === currentHash) {
+                console.log(`No changes detected for ${disk.mount}, skipping upload.`);
+                continue;
+            }
+
+            // Send to backend via API (HTTP POST)
+            try {
+                await axios.post(`${SERVER_URL}/api/agents/${process.env.AGENT_NAME || require('os').hostname()}/system/disk-scan`, {
+                    path: disk.mount,
+                    files
+                }, {
+                    headers: {
+                        'Authorization': `Bearer ${process.env.AGENT_TOKEN}`
+                    }
+                });
+                console.log(`Sent updated disk scan data for ${disk.mount}`);
+                global.diskHashes[disk.mount] = currentHash;
+            } catch (err) {
+                console.error(`Failed to send disk scan data for ${disk.mount}:`, err.message);
+            }
+        }
+    } catch (error) {
+        console.error('Error running disk scan:', error);
+    }
+}
+
+async function startDiskScanLoop() {
+    // Run immediately
+    await runDiskScan();
+
+    // Then run every minute (simulating "update on change" without heavy watching)
+    // 60000 ms = 1 minute
+    setInterval(runDiskScan, 60000);
+}
+
 async function startMetricsLoop() {
     // Send initial metrics immediately
     await sendMetrics();
@@ -159,3 +296,4 @@ async function startMetricsLoop() {
     // Then send at regular intervals
     setInterval(sendMetrics, INTERVAL);
 }
+

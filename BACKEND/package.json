@@ -23,6 +23,7 @@
     "socket.io": "^4.8.1",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
-    "systeminformation": "^5.27.11"
+    "systeminformation": "^5.27.11",
+    "uuid": "^13.0.0"
   }
 }

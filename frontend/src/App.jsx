@@ -12,8 +12,10 @@ import Login from './pages/Login';
 import Signup from './pages/Signup';
 import DockerDetails from './pages/DockerDetails';
 import DockerImageDetails from './pages/DockerImageDetails';
+import ContainerDetails from './pages/ContainerDetails';
 import Dashboard from './pages/Dashboard';
 import ServerDetails from './pages/ServerDetails';
+import FileExplorer from './pages/FileExplorer';
 import MainLayout from './layouts/MainLayout';
 
 // Protected Route Component
@@ -72,6 +74,8 @@ function App() {
                   <Route path="/server/:id" element={<ServerDetails />} />
                   <Route path="/server/:serverId/docker-details" element={<DockerDetailsWrapper />} />
                   <Route path="/server/:serverId/docker/images/:imageName" element={<DockerImageDetailsWrapper />} />
+                  <Route path="/server/:serverId/docker-details/:containerId" element={<ContainerDetails />} />
+                  <Route path="/server/:id/files" element={<FileExplorer />} />
 
                   {/* Placeholder routes for sidebar links */}
                   <Route path="/metrics" element={<div className="text-white p-8">Metrics Monitoring - Coming Soon</div>} />

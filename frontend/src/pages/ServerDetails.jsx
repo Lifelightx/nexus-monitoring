@@ -12,6 +12,7 @@ const ServerDetails = () => {
     const [history, setHistory] = useState([]);
     const [dockerDetails, setDockerDetails] = useState(null);
 
+
     const socket = useSocket();
 
     useEffect(() => {
@@ -47,12 +48,23 @@ const ServerDetails = () => {
         };
     }, [id, agent, socket]);
 
+
+
+    const handleDiskClick = (mountPoint) => {
+        navigate(`/server/${id}/files`, {
+            state: {
+                agent: agent,
+                selectedDisk: mountPoint
+            }
+        });
+    };
+
     if (!metrics && !agent) {
         return (
             <div className="flex flex-col items-center justify-center h-[60vh]">
                 <div className="w-16 h-16 border-4 border-accent border-t-transparent rounded-full animate-spin mb-4"></div>
                 <p className="text-text-secondary">Connecting to server...</p>
-            </div>
+            </div >
         );
     }
 
@@ -113,6 +125,100 @@ const ServerDetails = () => {
                             <h3 className="text-text-secondary text-xs font-bold uppercase tracking-wider mb-2">Network TX</h3>
                             <p className="text-3xl font-bold text-white">{(metrics.network[0].tx_sec / 1024).toFixed(1)} <span className="text-sm font-normal text-text-secondary">KB/s</span></p>
                             <p className="text-xs text-text-secondary mt-1">Total: {(metrics.network[0].tx_bytes / 1024 / 1024).toFixed(1)} MB</p>
+                        </div>
+                    </div>
+
+                    {/* System Info & Disk Usage */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                        {/* System Info */}
+                        <div className="bg-bg-secondary/50 backdrop-blur-sm p-6 rounded-xl border border-white/5">
+                            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                                <i className="fas fa-server text-accent"></i> System Info
+                            </h3>
+                            <div className="space-y-4">
+                                <div>
+                                    <p className="text-text-secondary text-xs uppercase tracking-wider">Hostname</p>
+                                    <p className="text-white font-mono">{metrics.os?.hostname || 'N/A'}</p>
+                                </div>
+                                <div>
+                                    <p className="text-text-secondary text-xs uppercase tracking-wider">IP Address</p>
+                                    <p className="text-white font-mono">{metrics.os?.ip || 'N/A'}</p>
+                                </div>
+                                <div>
+                                    <p className="text-text-secondary text-xs uppercase tracking-wider">OS / Kernel</p>
+                                    <p className="text-white">{metrics.os?.distro || 'Linux'} {metrics.os?.release || ''}</p>
+                                    <p className="text-text-secondary text-xs">{metrics.os?.kernel || ''}</p>
+                                </div>
+                                <div>
+                                    <p className="text-text-secondary text-xs uppercase tracking-wider">Architecture</p>
+                                    <p className="text-white">{metrics.os?.arch || 'N/A'}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Disk Usage */}
+                        <div className="bg-bg-secondary/50 backdrop-blur-sm p-6 rounded-xl border border-white/5">
+                            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                                <i className="fas fa-hdd text-purple-400"></i> Disk Usage
+                            </h3>
+                            <div className="space-y-4 max-h-[250px] overflow-y-auto pr-2">
+                                {metrics.disk?.map((disk, idx) => (
+                                    <div
+                                        key={idx}
+                                        className="bg-white/5 p-3 rounded-lg cursor-pointer hover:bg-white/10 transition-colors group"
+                                        onClick={() => handleDiskClick(disk.mount)}
+                                        title="Click to analyze disk usage"
+                                    >
+                                        <div className="flex justify-between items-center mb-1">
+                                            <span className="font-mono text-sm text-white group-hover:text-accent transition-colors">{disk.mount}</span>
+                                            <span className="text-xs text-text-secondary">{disk.fs}</span>
+                                        </div>
+                                        <div className="flex justify-between items-end mb-2">
+                                            <span className="text-2xl font-bold text-white">{disk.use.toFixed(1)}%</span>
+                                            <span className="text-xs text-text-secondary">
+                                                {(disk.used / 1024 / 1024 / 1024).toFixed(1)} / {(disk.size / 1024 / 1024 / 1024).toFixed(1)} GB
+                                            </span>
+                                        </div>
+                                        <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
+                                            <div
+                                                className={`h-full rounded-full transition-all duration-500 ${disk.use > 90 ? 'bg-red-500' : disk.use > 70 ? 'bg-yellow-500' : 'bg-purple-500'}`}
+                                                style={{ width: `${disk.use}%` }}
+                                            ></div>
+                                        </div>
+                                    </div>
+                                )) || <p className="text-text-secondary">No disk info available</p>}
+                            </div>
+                        </div>
+
+                        {/* Active Processes */}
+                        <div className="bg-bg-secondary/50 backdrop-blur-sm p-6 rounded-xl border border-white/5">
+                            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                                <i className="fas fa-microchip text-green-400"></i> Processes
+                            </h3>
+                            <div className="grid grid-cols-2 gap-4 mb-4">
+                                <div className="bg-white/5 p-3 rounded-lg text-center">
+                                    <p className="text-2xl font-bold text-white">{metrics.processes?.all || 0}</p>
+                                    <p className="text-xs text-text-secondary uppercase">Total</p>
+                                </div>
+                                <div className="bg-white/5 p-3 rounded-lg text-center">
+                                    <p className="text-2xl font-bold text-green-400">{metrics.processes?.running || 0}</p>
+                                    <p className="text-xs text-text-secondary uppercase">Running</p>
+                                </div>
+                            </div>
+                            <div>
+                                <p className="text-xs text-text-secondary uppercase tracking-wider mb-2">Top CPU Consumers</p>
+                                <div className="space-y-2">
+                                    {metrics.processes?.list?.slice(0, 3).map((proc, idx) => (
+                                        <div key={idx} className="flex justify-between items-center text-sm border-b border-white/5 pb-2 last:border-0">
+                                            <span className="text-white truncate max-w-[120px]" title={proc.name}>{proc.name}</span>
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-text-secondary font-mono text-xs">{proc.pid}</span>
+                                                <span className="text-accent font-bold w-12 text-right">{proc.cpu.toFixed(1)}%</span>
+                                            </div>
+                                        </div>
+                                    )) || <p className="text-text-secondary text-sm">No process data</p>}
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -218,6 +324,7 @@ const ServerDetails = () => {
                     <p className="text-text-secondary">The agent hasn't sent any metrics yet.</p>
                 </div>
             )}
+            {/* Disk Analysis Modal Removed */}
         </div>
     );
 };

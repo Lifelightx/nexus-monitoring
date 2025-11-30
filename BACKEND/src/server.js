@@ -46,6 +46,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/agents', agentRoutes);
 app.use('/api/agents', dockerRoutes);
 app.use('/api/install', require('./routes/installRoutes'));
+app.use('/api/agents', require('./routes/systemRoutes'));
 
 app.get('/', (req, res) => {
     res.json({ message: 'Nexus Monitor API is running', docs: '/api-docs' });

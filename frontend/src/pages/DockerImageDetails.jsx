@@ -36,7 +36,36 @@ const DockerImageDetails = ({ dockerData: propDockerData, agentName: propAgentNa
         };
 
         const handleControlResult = (data) => {
-            if (loadingAction && (data.containerId === loadingAction.containerId || (data.action === 'removeImage'))) {
+            if (!loadingAction) return;
+
+            // Handle Bulk Actions
+            if (loadingAction.action === 'stopAll' || loadingAction.action === 'deleteAll') {
+                if (loadingAction.pendingIds && loadingAction.pendingIds.includes(data.containerId)) {
+                    const newPendingIds = loadingAction.pendingIds.filter(id => id !== data.containerId);
+
+                    // Update state with remaining IDs
+                    if (newPendingIds.length > 0) {
+                        setLoadingAction(prev => ({ ...prev, pendingIds: newPendingIds }));
+                    } else {
+                        // All done
+                        setLoadingAction(null);
+                        setNotification({
+                            type: 'success',
+                            message: loadingAction.action === 'stopAll' ? 'All containers stopped' : 'All containers deleted'
+                        });
+                        setTimeout(() => setNotification(null), 3000);
+
+                        if (loadingAction.action === 'deleteAll') {
+                            setShowDeleteAllModal(false);
+                        }
+                    }
+                }
+                // Suppress individual notifications during bulk action
+                return;
+            }
+
+            // Handle Single Actions
+            if (data.containerId === loadingAction.containerId || (data.action === 'removeImage')) {
                 setLoadingAction(null);
                 if (data.success) {
                     setNotification({ type: 'success', message: data.message });
@@ -51,7 +80,7 @@ const DockerImageDetails = ({ dockerData: propDockerData, agentName: propAgentNa
                 } else {
                     setNotification({ type: 'error', message: data.message || 'Operation failed' });
                 }
-                setTimeout(() => setNotification(null), 5000);
+                setTimeout(() => setNotification(null), 3000);
             }
         };
 
@@ -64,9 +93,9 @@ const DockerImageDetails = ({ dockerData: propDockerData, agentName: propAgentNa
         };
     }, [loadingAction, serverId, socket, navigate, localDockerData, localAgentName]);
 
-    const handleDockerControl = async (containerId, action, payload = null) => {
+    const handleDockerControl = async (containerId, action, payload = null, skipLoadingState = false) => {
         if (!serverId) return;
-        setLoadingAction({ containerId, action });
+        if (!skipLoadingState) setLoadingAction({ containerId, action });
 
         try {
             const token = localStorage.getItem('token');
@@ -77,7 +106,7 @@ const DockerImageDetails = ({ dockerData: propDockerData, agentName: propAgentNa
             );
         } catch (error) {
             console.error('Error controlling container:', error);
-            setLoadingAction(null);
+            if (!skipLoadingState) setLoadingAction(null);
             setNotification({
                 type: 'error',
                 message: error.response?.data?.message || 'Failed to send command'
@@ -130,21 +159,41 @@ const DockerImageDetails = ({ dockerData: propDockerData, agentName: propAgentNa
         return <div className="min-h-screen bg-bg-dark text-white p-8 pt-20 flex justify-center">Loading...</div>;
     }
 
-    const imageContainers = localDockerData.containers.filter(c => c.image === imageName);
+    // Find the image object to get its ID
+    const imageObj = localDockerData.images.find(img => img.repoTags?.includes(imageName));
+    const imageId = imageObj?.id;
+
+    const imageContainers = localDockerData.containers.filter(c => {
+        // 1. Match by Image ID (Robust)
+        if (imageId && c.imageID === imageId) return true;
+        // 2. Match by exact Image Name (Tag)
+        if (c.image === imageName) return true;
+        // 3. Match if container image is one of the repo tags
+        if (imageObj?.repoTags?.includes(c.image)) return true;
+
+        return false;
+    });
+
     const runningContainers = imageContainers.filter(c => c.state === 'running');
     const stoppedContainers = imageContainers.filter(c => c.state !== 'running');
 
     const handleStopAll = () => {
-        runningContainers.forEach(c => {
-            handleDockerControl(c.id, 'stop');
+        const idsToStop = runningContainers.map(c => c.id);
+        setLoadingAction({ action: 'stopAll', pendingIds: idsToStop });
+
+        idsToStop.forEach(id => {
+            handleDockerControl(id, 'stop', null, true);
         });
     };
 
     const handleDeleteAll = () => {
-        stoppedContainers.forEach(c => {
-            handleDockerControl(c.id, 'remove');
+        const idsToDelete = stoppedContainers.map(c => c.id);
+        setLoadingAction({ action: 'deleteAll', pendingIds: idsToDelete });
+
+        idsToDelete.forEach(id => {
+            handleDockerControl(id, 'remove', null, true);
         });
-        setShowDeleteAllModal(false);
+        // Don't close modal yet, wait for completion
     };
 
     return (
@@ -178,9 +227,15 @@ const DockerImageDetails = ({ dockerData: propDockerData, agentName: propAgentNa
                             {runningContainers.length > 0 ? (
                                 <button
                                     onClick={handleStopAll}
-                                    className="px-4 py-2 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white transition-all border border-red-500/20"
+                                    disabled={loadingAction?.action === 'stopAll'}
+                                    className="px-4 py-2 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white transition-all border border-red-500/20 flex items-center gap-2"
                                 >
-                                    <i className="fas fa-stop-circle mr-2"></i> Stop All
+                                    {loadingAction?.action === 'stopAll' ? (
+                                        <i className="fas fa-spinner fa-spin"></i>
+                                    ) : (
+                                        <i className="fas fa-stop-circle"></i>
+                                    )}
+                                    Stop All
                                 </button>
                             ) : stoppedContainers.length > 0 ? (
                                 <button
@@ -193,14 +248,19 @@ const DockerImageDetails = ({ dockerData: propDockerData, agentName: propAgentNa
 
                             <button
                                 onClick={() => handleImageControl('removeImage')}
-                                disabled={imageContainers.length > 0}
-                                className={`px-4 py-2 rounded-lg transition-all shadow-lg ${imageContainers.length > 0
+                                disabled={imageContainers.length > 0 || loadingAction?.action === 'removeImage'}
+                                className={`px-4 py-2 rounded-lg transition-all shadow-lg flex items-center gap-2 ${imageContainers.length > 0
                                     ? 'bg-gray-600 text-gray-400 cursor-not-allowed opacity-50'
                                     : 'bg-red-600 text-white hover:bg-red-700 shadow-red-600/20'
                                     }`}
                                 title={imageContainers.length > 0 ? "Remove all containers first" : "Delete Image"}
                             >
-                                <i className="fas fa-trash mr-2"></i> Delete Image
+                                {loadingAction?.imageId === imageName && loadingAction?.action === 'removeImage' ? (
+                                    <i className="fas fa-spinner fa-spin"></i>
+                                ) : (
+                                    <i className="fas fa-trash"></i>
+                                )}
+                                Delete Image
                             </button>
                         </div>
                     </div>
@@ -243,29 +303,43 @@ const DockerImageDetails = ({ dockerData: propDockerData, agentName: propAgentNa
                                                             onClick={() => handleDockerControl(container.id, 'stop')}
                                                             className="p-2 bg-red-500/10 text-red-400 rounded hover:bg-red-500 hover:text-white transition-colors"
                                                             title="Stop"
+                                                            disabled={loadingAction?.containerId === container.id}
                                                         >
-                                                            <i className="fas fa-stop"></i>
+                                                            {loadingAction?.containerId === container.id && loadingAction?.action === 'stop' ? (
+                                                                <i className="fas fa-spinner fa-spin"></i>
+                                                            ) : (
+                                                                <i className="fas fa-stop"></i>
+                                                            )}
                                                         </button>
                                                     ) : (
                                                         <button
                                                             onClick={() => handleDockerControl(container.id, 'start')}
                                                             className="p-2 bg-green-500/10 text-green-400 rounded hover:bg-green-500 hover:text-white transition-colors"
                                                             title="Start"
+                                                            disabled={loadingAction?.containerId === container.id}
                                                         >
-                                                            <i className="fas fa-play"></i>
+                                                            {loadingAction?.containerId === container.id && loadingAction?.action === 'start' ? (
+                                                                <i className="fas fa-spinner fa-spin"></i>
+                                                            ) : (
+                                                                <i className="fas fa-play"></i>
+                                                            )}
                                                         </button>
                                                     )}
 
                                                     <button
                                                         onClick={() => handleDockerControl(container.id, 'remove')}
-                                                        disabled={container.state === 'running'}
+                                                        disabled={container.state === 'running' || loadingAction?.containerId === container.id}
                                                         className={`p-2 rounded transition-colors ${container.state === 'running'
                                                             ? 'bg-white/5 text-white/20 cursor-not-allowed'
                                                             : 'bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white'
                                                             }`}
                                                         title={container.state === 'running' ? "Stop container first" : "Delete"}
                                                     >
-                                                        <i className="fas fa-trash"></i>
+                                                        {loadingAction?.containerId === container.id && loadingAction?.action === 'remove' ? (
+                                                            <i className="fas fa-spinner fa-spin"></i>
+                                                        ) : (
+                                                            <i className="fas fa-trash"></i>
+                                                        )}
                                                     </button>
                                                 </div>
                                             </td>
@@ -304,8 +378,12 @@ const DockerImageDetails = ({ dockerData: propDockerData, agentName: propAgentNa
                                 </button>
                                 <button
                                     onClick={handleDeleteAll}
-                                    className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors shadow-lg shadow-red-600/20"
+                                    disabled={loadingAction?.action === 'deleteAll'}
+                                    className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors shadow-lg shadow-red-600/20 flex items-center gap-2"
                                 >
+                                    {loadingAction?.action === 'deleteAll' ? (
+                                        <i className="fas fa-spinner fa-spin"></i>
+                                    ) : null}
                                     Delete All
                                 </button>
                             </div>

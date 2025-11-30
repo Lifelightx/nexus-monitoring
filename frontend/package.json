@@ -15,7 +15,9 @@
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.9.6",
     "recharts": "^3.5.0",
-    "socket.io-client": "^4.8.1"
+    "socket.io-client": "^4.8.1",
+    "xterm": "^5.3.0",
+    "xterm-addon-fit": "^0.8.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
