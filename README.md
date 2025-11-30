@@ -4,26 +4,41 @@ Nexus Monitor is a comprehensive, enterprise-grade server monitoring and managem
 
 ## 🚀 Features
 
-### Core Monitoring
+### 📊 Core Monitoring
 -   **Real-time Metrics**: Live tracking of CPU usage, Memory consumption, and Network traffic (RX/TX).
 -   **Multi-Server Dashboard**: View all your connected servers in a grid view with status indicators (Online/Offline).
 -   **Historical Data**: Interactive charts showing resource usage trends over time.
+-   **System Info**: Detailed hardware specifications (CPU model, OS, Uptime, etc.).
 
-### Docker Management
--   **Container Visualization**: View all running and stopped containers on connected servers.
--   **Remote Control**: Start, Stop, and Restart Docker containers directly from the dashboard.
--   **Detailed Insights**: Inspect container logs, port bindings, environment variables, and resource usage stats.
+### 🐳 Docker Management
+-   **Container Visualization**: View all running and stopped containers with their status and resource usage.
+-   **Remote Control**: Start, Stop, Restart, and Remove Docker containers directly from the dashboard.
+-   **Live Logs**: Stream real-time logs from any container.
+-   **Interactive Terminal**: Execute commands inside containers directly from your browser (supports `sh`/`bash`).
+-   **Image Management**: View and remove Docker images.
+-   **Volume Management**: List and inspect Docker volumes.
+-   **Bulk Actions**: Stop or delete multiple containers at once.
 
-### User Experience
+### 📂 File System Explorer
+-   **Live File Browser**: Browse the remote server's file system in real-time.
+-   **Disk Analysis**: View disk usage statistics and file details.
+-   **Optimized Sync**: Smart caching ensures only changed file data is transmitted to save bandwidth.
+
+### 🔐 Security & Architecture
+-   **Secure Communication**: All data between Agents and Backend is encrypted.
+-   **Agent-Based**: Lightweight Node.js agent runs on target servers.
+-   **Fallback Mechanisms**: Smart fallbacks for features like the terminal (works even without native build tools).
+
+### 🎨 User Experience
 -   **Modern UI**: Built with a "dark mode first" aesthetic using glassmorphism and smooth animations.
--   **Modular Design**: Scalable architecture with a sidebar navigation for easy access to different modules.
+-   **Responsive Design**: Fully responsive layout that works on desktop and mobile.
 -   **Interactive Guide**: Built-in installation guide to help you connect new servers in seconds.
 
 ## 🛠️ Tech Stack
 
--   **Frontend**: React (Vite), TailwindCSS, Recharts, Socket.io Client.
+-   **Frontend**: React (Vite), TailwindCSS, Recharts, Xterm.js, Socket.io Client.
 -   **Backend**: Node.js, Express, MongoDB (Mongoose), Socket.io, JWT Authentication.
--   **Agent**: Node.js, Systeminformation, Dockerode.
+-   **Agent**: Node.js, Systeminformation, Dockerode, Socket.io Client.
 
 ## 📦 Installation & Setup
 
@@ -34,7 +49,7 @@ Nexus Monitor is a comprehensive, enterprise-grade server monitoring and managem
 
 ### 1. Backend Setup
 ```bash
-cd BACKEND
+cd backend
 npm install
 # Create a .env file based on .env.example (or set MONGO_URI and JWT_SECRET)
 npm run dev
@@ -67,7 +82,8 @@ node index.js
     *   Once the agent starts, it will automatically appear in your "Your Servers" list.
 3.  **Monitor & Manage**:
     *   Click on a server card to view detailed metrics.
-    *   Navigate to the "Docker" section to manage containers.
+    *   Navigate to the "Docker" section to manage containers, view logs, or open a terminal.
+    *   Use the "Files" tab to explore the server's file system.
 
 ## 🗺️ Roadmap
 
