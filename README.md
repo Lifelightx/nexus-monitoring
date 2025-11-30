@@ -36,8 +36,8 @@ Nexus Monitor is a comprehensive, enterprise-grade server monitoring and managem
 
 ## 🛠️ Tech Stack
 
--   **Frontend**: React (Vite), TailwindCSS, Recharts, Xterm.js, Socket.io Client.
--   **Backend**: Node.js, Express, MongoDB (Mongoose), Socket.io, JWT Authentication.
+-   **Frontend**: React v19, TailwindCSS, Recharts, Xterm.js, Socket.io Client.
+-   **Backend**: Node.js v22, Express v5, MongoDB (Mongoose v9), Socket.io, JWT Authentication.
 -   **Agent**: Node.js, Systeminformation, Dockerode, Socket.io Client.
 
 ## 📦 Installation & Setup
@@ -72,6 +72,13 @@ npm install
 # Configure .env to point to your Backend URL
 node index.js
 ```
+
+## 🔑 Default Login Credentials
+
+If you are running the application locally for testing, you can use the following credentials (or register a new user):
+
+-   **Email**: `admin@example.com`
+-   **Password**: `admin123`
 
 ## 📝 Usage
 
