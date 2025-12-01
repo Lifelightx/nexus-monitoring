@@ -16,7 +16,7 @@ const MainLayout = () => {
             <Sidebar />
 
             <main className="pl-64 pt-16 min-h-screen transition-all duration-300">
-                <div className="p-8 max-w-7xl mx-auto">
+                <div className="p-3 max-w-7xl mx-auto">
                     <Outlet context={{ showGuide, setShowGuide }} />
                 </div>
             </main>

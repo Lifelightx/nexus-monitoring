@@ -199,6 +199,23 @@ socket.on('system:fs:list', async (data) => {
     }
 });
 
+// Handle Docker Compose Deployment
+socket.on('agent:deploy:compose', async ({ composeContent }, callback) => {
+    console.log('Received docker compose deployment request');
+    try {
+        const { deployCompose } = require('./handlers/dockerHandler');
+        const result = await deployCompose(composeContent);
+        if (callback) {
+            callback({ success: true, message: result.message });
+        }
+    } catch (error) {
+        console.error('Deploy failed:', error);
+        if (callback) {
+            callback({ success: false, message: error.message || 'Deployment failed' });
+        }
+    }
+});
+
 async function sendMetrics() {
     try {
         // Collect all metrics
@@ -248,14 +265,14 @@ async function runDiskScan() {
 
         // Scan each disk
         for (const disk of metrics.disk) {
-            console.log(`Scanning disk: ${disk.mount}`);
+            // console.log(`Scanning disk: ${disk.mount}`);
             const files = await scanDisk(disk.mount);
 
             // Generate hash of the file list to detect changes
             const currentHash = crypto.createHash('md5').update(JSON.stringify(files)).digest('hex');
 
             if (global.diskHashes[disk.mount] === currentHash) {
-                console.log(`No changes detected for ${disk.mount}, skipping upload.`);
+                // console.log(`No changes detected for ${disk.mount}, skipping upload.`);
                 continue;
             }
 

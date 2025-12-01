@@ -12,10 +12,12 @@ import Login from './pages/Login';
 import Signup from './pages/Signup';
 import DockerDetails from './pages/DockerDetails';
 import DockerImageDetails from './pages/DockerImageDetails';
+import DockerNetworkDetails from './pages/DockerNetworkDetails';
 import ContainerDetails from './pages/ContainerDetails';
 import Dashboard from './pages/Dashboard';
 import ServerDetails from './pages/ServerDetails';
 import FileExplorer from './pages/FileExplorer';
+import Containerization from './pages/Containerization';
 import MainLayout from './layouts/MainLayout';
 
 // Protected Route Component
@@ -55,6 +57,14 @@ const DockerImageDetailsWrapper = () => {
   return <DockerImageDetails serverId={serverId} imageName={imageName} dockerData={dockerData} agentName={agentName} />;
 };
 
+// Docker Network Details Wrapper
+const DockerNetworkDetailsWrapper = () => {
+  const { serverId, networkName } = useParams();
+  const location = useLocation();
+  const { dockerData, agentName } = location.state || {};
+  return <DockerNetworkDetails serverId={serverId} networkName={networkName} dockerData={dockerData} agentName={agentName} />;
+};
+
 function App() {
   return (
     <AuthProvider>
@@ -74,12 +84,13 @@ function App() {
                   <Route path="/server/:id" element={<ServerDetails />} />
                   <Route path="/server/:serverId/docker-details" element={<DockerDetailsWrapper />} />
                   <Route path="/server/:serverId/docker/images/:imageName" element={<DockerImageDetailsWrapper />} />
+                  <Route path="/server/:serverId/docker-details/network/:networkName" element={<DockerNetworkDetailsWrapper />} />
                   <Route path="/server/:serverId/docker-details/:containerId" element={<ContainerDetails />} />
                   <Route path="/server/:id/files" element={<FileExplorer />} />
 
                   {/* Placeholder routes for sidebar links */}
                   <Route path="/metrics" element={<div className="text-white p-8">Metrics Monitoring - Coming Soon</div>} />
-                  <Route path="/containerization" element={<div className="text-white p-8">Containerization SaaS - Coming Soon</div>} />
+                  <Route path="/containerization" element={<Containerization />} />
                   <Route path="/servers" element={<Navigate to="/dashboard" />} />
                   <Route path="/alerts" element={<div className="text-white p-8">Logs & Alerts - Coming Soon</div>} />
                   <Route path="/settings" element={<div className="text-white p-8">Settings - Coming Soon</div>} />

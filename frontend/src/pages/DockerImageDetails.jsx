@@ -116,16 +116,6 @@ const DockerImageDetails = ({ dockerData: propDockerData, agentName: propAgentNa
 
     const handleImageControl = async (action) => {
         if (!serverId) return;
-        // For image removal, we don't need a containerId, but the backend expects one or we need to adjust backend validation.
-        // The backend validation requires containerId for non-create actions.
-        // We might need to send a dummy containerId or update backend.
-        // However, looking at backend code: if (action !== 'create' && !containerId) return 400.
-        // So I need to update backend to allow removeImage without containerId.
-        // Or I can send a dummy containerId.
-
-        // Wait, I can't update backend easily if I don't want to restart it (though I should).
-        // Let's assume I will update backend too.
-
         setLoadingAction({ imageId: imageName, action });
 
         try {
@@ -141,7 +131,7 @@ const DockerImageDetails = ({ dockerData: propDockerData, agentName: propAgentNa
             }
 
             await axios.post(
-                `http://localhost:3000/api/agents/${serverId}/docker/control`,
+                `${import.meta.env.VITE_API_URL}/api/agents/${serverId}/docker/control`,
                 { action, containerId: 'image-action', payload: { imageId } }, // Sending dummy containerId
                 { headers: { Authorization: `Bearer ${token}` } }
             );

@@ -18,6 +18,7 @@ const DockerDetails = ({ dockerData, agentName, serverId: propServerId }) => {
     const [activeActionMenu, setActiveActionMenu] = useState(null);
     const [loadingAction, setLoadingAction] = useState(null); // {containerId, action}
 
+
     const [notification, setNotification] = useState(null); // {type, message}
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [createForm, setCreateForm] = useState({
@@ -93,7 +94,7 @@ const DockerDetails = ({ dockerData, agentName, serverId: propServerId }) => {
         };
     }, [loadingAction, serverId, socket]);
 
-    const handleDockerControl = async (containerId, action, payload = null) => {
+    const handleDockerControl = async (containerId, action, payload = null, skipLoadingState = false) => {
         if (!serverId) {
             setNotification({
                 type: 'error',
@@ -102,7 +103,7 @@ const DockerDetails = ({ dockerData, agentName, serverId: propServerId }) => {
             return;
         }
 
-        setLoadingAction({ containerId, action });
+        if (!skipLoadingState) setLoadingAction({ containerId, action });
 
         try {
             const token = localStorage.getItem('token');
@@ -116,7 +117,7 @@ const DockerDetails = ({ dockerData, agentName, serverId: propServerId }) => {
 
         } catch (error) {
             console.error('Error controlling container:', error);
-            setLoadingAction(null);
+            if (!skipLoadingState) setLoadingAction(null);
             setNotification({
                 type: 'error',
                 message: error.response?.data?.message || 'Failed to send command'
@@ -298,6 +299,19 @@ const DockerDetails = ({ dockerData, agentName, serverId: propServerId }) => {
                         <i className="fas fa-database mr-2"></i>
                         Volumes ({volumes.length})
                     </button>
+                    <button
+                        onClick={() => {
+                            setActiveTab('networks');
+                            navigate('.', { state: { ...location.state, activeTab: 'networks' }, replace: true });
+                        }}
+                        className={`px-6 py-3 rounded-lg font-medium transition-all ${activeTab === 'networks'
+                            ? 'bg-accent text-white'
+                            : 'glass text-text-secondary hover:text-white'
+                            }`}
+                    >
+                        <i className="fas fa-network-wired mr-2"></i>
+                        Networks ({localDockerData.networks?.length || 0})
+                    </button>
 
                     <button
                         onClick={() => setShowCreateModal(true)}
@@ -457,6 +471,8 @@ const DockerDetails = ({ dockerData, agentName, serverId: propServerId }) => {
                         </div>
                     </div>
                 )}
+
+
 
                 {/* Create Container Modal */}
                 {showCreateModal && (
@@ -822,6 +838,62 @@ const DockerDetails = ({ dockerData, agentName, serverId: propServerId }) => {
                                                 ))}
                                         </tbody>
                                     </table>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Networks Tab */}
+                    {activeTab === 'networks' && (
+                        <div>
+                            {(!localDockerData.networks || localDockerData.networks.length === 0) ? (
+                                <div className="text-center py-12">
+                                    <i className="fas fa-network-wired text-6xl text-white/10 mb-4"></i>
+                                    <p className="text-text-secondary">No networks found</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-3">
+                                    {localDockerData.networks.map((network) => (
+                                        <div
+                                            key={network.id}
+                                            onClick={() => navigate(`/server/${serverId}/docker-details/network/${encodeURIComponent(network.name)}`, {
+                                                state: { dockerData: localDockerData, agentName: localAgentName }
+                                            })}
+                                            className="glass p-4 rounded-xl border-l-4 border-blue-500 cursor-pointer hover:bg-white/5 transition-all group flex items-center justify-between"
+                                        >
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center">
+                                                    <i className="fas fa-network-wired text-blue-400"></i>
+                                                </div>
+                                                <div>
+                                                    <h3 className="font-bold text-lg group-hover:text-accent transition-colors">{network.name}</h3>
+                                                    <p className="text-xs font-mono text-text-secondary">{network.id.substring(0, 12)}</p>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex items-center gap-8 text-sm">
+                                                <div className="hidden md:block">
+                                                    <p className="text-text-secondary text-xs">Driver</p>
+                                                    <p className="font-medium">{network.driver}</p>
+                                                </div>
+                                                <div className="hidden md:block">
+                                                    <p className="text-text-secondary text-xs">Scope</p>
+                                                    <p className="font-medium">{network.scope}</p>
+                                                </div>
+                                                <div className="hidden md:block">
+                                                    <p className="text-text-secondary text-xs">Subnet</p>
+                                                    <p className="font-mono text-xs">{network.subnet || 'N/A'}</p>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="text-text-secondary text-xs">Containers</p>
+                                                    <p className="font-bold text-white">{network.containers?.length || 0}</p>
+                                                </div>
+                                                <div className="text-accent opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <i className="fas fa-chevron-right"></i>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
                             )}
                         </div>

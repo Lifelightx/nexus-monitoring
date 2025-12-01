@@ -23,7 +23,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
     cors: {
-        origin: "http://localhost:5173",
+        origin: ["http://localhost:5173", "http://192.168.56.1:5173", "http://10.163.41.142:5173"],
         methods: ["GET", "POST"]
     }
 });
@@ -47,6 +47,7 @@ app.use('/api/agents', agentRoutes);
 app.use('/api/agents', dockerRoutes);
 app.use('/api/install', require('./routes/installRoutes'));
 app.use('/api/agents', require('./routes/systemRoutes'));
+app.use('/api/deploy', require('./routes/deployRoutes'));
 
 app.get('/', (req, res) => {
     res.json({ message: 'Nexus Monitor API is running', docs: '/api-docs' });

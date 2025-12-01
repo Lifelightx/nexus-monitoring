@@ -187,5 +187,56 @@ module.exports = {
     startTerminal,
     writeTerminal,
     resizeTerminal,
-    stopTerminal
+    stopTerminal,
+    deployCompose
 };
+
+/**
+ * Deploy Docker Compose stack
+ * @param {string} composeContent 
+ * @returns {Promise<{message: string, output: string}>}
+ */
+async function deployCompose(composeContent) {
+    const fs = require('fs').promises;
+    const path = require('path');
+    const { exec } = require('child_process');
+
+    const tempDir = os.tmpdir();
+    const filePath = path.join(tempDir, `docker-compose-${Date.now()}.yml`);
+
+    try {
+        await fs.writeFile(filePath, composeContent);
+
+        return new Promise((resolve, reject) => {
+            // Try 'docker compose' (v2)
+            const command = `docker compose -f "${filePath}" up -d --remove-orphans`;
+
+            console.log(`Executing: ${command}`);
+
+            exec(command, (error, stdout, stderr) => {
+                // Clean up file (async, don't wait)
+                fs.unlink(filePath).catch(e => console.error('Failed to cleanup temp file:', e));
+
+                if (error) {
+                    console.warn('docker compose v2 failed, trying v1...', error.message);
+
+                    // Fallback to 'docker-compose' (v1)
+                    const fallbackCommand = `docker-compose -f "${filePath}" up -d --remove-orphans`;
+
+                    exec(fallbackCommand, (err2, stdout2, stderr2) => {
+                        if (err2) {
+                            reject({ message: err2.message, output: stderr2 || err2.message });
+                        } else {
+                            resolve({ message: 'Deployed successfully (v1)', output: stdout2 });
+                        }
+                    });
+                    return;
+                }
+
+                resolve({ message: 'Deployed successfully', output: stdout });
+            });
+        });
+    } catch (err) {
+        throw new Error(`Failed to process compose file: ${err.message}`);
+    }
+}
