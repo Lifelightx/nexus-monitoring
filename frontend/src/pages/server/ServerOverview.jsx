@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
-import { useSocket } from '../context/SocketContext';
+import { useSocket } from '../../context/SocketContext';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
-const ServerDetails = () => {
+const ServerOverview = () => {
     const { id } = useParams();
     const location = useLocation();
     const navigate = useNavigate();
@@ -70,31 +70,7 @@ const ServerDetails = () => {
 
     return (
         <div>
-            <div className="flex items-center gap-4 mb-8">
-                <button
-                    onClick={() => navigate('/dashboard')}
-                    className="w-10 h-10 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-text-secondary hover:text-white transition-colors"
-                >
-                    <i className="fas fa-arrow-left"></i>
-                </button>
-                <div>
-                    <h1 className="text-2xl font-bold text-white flex items-center gap-3">
-                        {agent?.name || metrics?.agent || 'Unknown Server'}
-                        <span className={`px-2 py-0.5 rounded text-xs font-medium border ${metrics ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'}`}>
-                            {metrics ? 'Live' : 'Offline'}
-                        </span>
-                    </h1>
-                    <div className="flex items-center gap-4 text-sm text-text-secondary mt-1">
-                        <p>Server ID: {id}</p>
-                        {metrics?.uptime && (
-                            <>
-                                <span className="w-1 h-1 rounded-full bg-white/20"></span>
-                                <p>Uptime: {Math.floor(metrics.uptime / 3600)}h {Math.floor((metrics.uptime % 3600) / 60)}m</p>
-                            </>
-                        )}
-                    </div>
-                </div>
-            </div>
+            {/* Header Removed - handled by ServerLayout */}
 
             {metrics ? (
                 <>
@@ -265,24 +241,31 @@ const ServerDetails = () => {
                             <h3 className="text-xl font-bold text-white flex items-center gap-2">
                                 <i className="fab fa-docker text-blue-400"></i> Docker Containers
                             </h3>
-                            {dockerDetails && (
-                                <button
-                                    onClick={() => navigate(`/server/${id}/docker-details`, {
-                                        state: {
-                                            dockerData: dockerDetails,
-                                            agentName: agent?.name || metrics?.agent,
-                                            agentId: id
-                                        }
-                                    })}
-                                    className="bg-blue-500/10 text-blue-400 hover:bg-blue-500 hover:text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium flex items-center gap-2"
-                                >
-                                    <i className="fas fa-external-link-alt"></i>
-                                    View Full Details
-                                </button>
-                            )}
                         </div>
 
-                        {metrics.docker && metrics.docker.length > 0 ? (
+                        {/* Docker Summary Counts */}
+                        {dockerDetails && dockerDetails.info && (
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                                <div className="bg-white/5 p-3 rounded-lg text-center">
+                                    <p className="text-2xl font-bold text-blue-400">{dockerDetails.info.containers || 0}</p>
+                                    <p className="text-xs text-text-secondary uppercase">Containers</p>
+                                </div>
+                                <div className="bg-white/5 p-3 rounded-lg text-center">
+                                    <p className="text-2xl font-bold text-purple-400">{dockerDetails.info.images || 0}</p>
+                                    <p className="text-xs text-text-secondary uppercase">Images</p>
+                                </div>
+                                <div className="bg-white/5 p-3 rounded-lg text-center">
+                                    <p className="text-2xl font-bold text-orange-400">{dockerDetails.volumes?.length || 0}</p>
+                                    <p className="text-xs text-text-secondary uppercase">Volumes</p>
+                                </div>
+                                <div className="bg-white/5 p-3 rounded-lg text-center">
+                                    <p className="text-2xl font-bold text-green-400">{dockerDetails.networks?.length || 0}</p>
+                                    <p className="text-xs text-text-secondary uppercase">Networks</p>
+                                </div>
+                            </div>
+                        )}
+
+                        {metrics.docker && metrics.docker.filter(c => c.state === 'running').length > 0 ? (
                             <div className="overflow-x-auto">
                                 <table className="w-full text-left border-collapse">
                                     <thead>
@@ -294,12 +277,12 @@ const ServerDetails = () => {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {metrics.docker.map(container => (
+                                        {metrics.docker.filter(c => c.state === 'running').map(container => (
                                             <tr key={container.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                                                 <td className="p-4 font-medium text-white">{container.name}</td>
                                                 <td className="p-4 text-text-secondary">{container.image}</td>
                                                 <td className="p-4">
-                                                    <span className={`px-2 py-1 rounded text-xs font-medium ${container.state === 'running' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
+                                                    <span className="px-2 py-1 rounded text-xs font-medium bg-green-500/10 text-green-400 border border-green-500/20">
                                                         {container.state}
                                                     </span>
                                                 </td>
@@ -312,7 +295,7 @@ const ServerDetails = () => {
                         ) : (
                             <div className="text-center py-12 text-text-secondary">
                                 <i className="fas fa-box-open text-4xl mb-3 opacity-30"></i>
-                                <p>No active containers found</p>
+                                <p>No running containers found</p>
                             </div>
                         )}
                     </div>
@@ -329,4 +312,4 @@ const ServerDetails = () => {
     );
 };
 
-export default ServerDetails;
+export default ServerOverview;

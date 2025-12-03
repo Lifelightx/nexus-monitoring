@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
-import { useSocket } from '../context/SocketContext';
+import { useSocket } from '../../context/SocketContext';
+import Notification from '../../components/Notification';
 
-const DockerDetails = ({ dockerData, agentName, serverId: propServerId }) => {
+const DockerDetails = ({ dockerData, agentName, serverId: propServerId, initialTab = 'containers' }) => {
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -14,7 +15,7 @@ const DockerDetails = ({ dockerData, agentName, serverId: propServerId }) => {
     const [localDockerData, setLocalDockerData] = useState(dockerData || location.state?.dockerData);
     const [localAgentName, setLocalAgentName] = useState(agentName || location.state?.agentName);
     const [selectedContainer, setSelectedContainer] = useState(null);
-    const [activeTab, setActiveTab] = useState(location.state?.activeTab || 'containers');
+    const [activeTab, setActiveTab] = useState(initialTab);
     const [activeActionMenu, setActiveActionMenu] = useState(null);
     const [loadingAction, setLoadingAction] = useState(null); // {containerId, action}
 
@@ -31,6 +32,20 @@ const DockerDetails = ({ dockerData, agentName, serverId: propServerId }) => {
     });
 
     const socket = useSocket();
+
+    // Update activeTab when initialTab changes
+    useEffect(() => {
+        if (initialTab) {
+            setActiveTab(initialTab);
+        }
+    }, [initialTab]);
+
+    // Sync dockerData prop to local state
+    useEffect(() => {
+        if (dockerData) {
+            setLocalDockerData(dockerData);
+        }
+    }, [dockerData]);
 
     // Socket.io for real-time updates
     useEffect(() => {
@@ -79,8 +94,7 @@ const DockerDetails = ({ dockerData, agentName, serverId: propServerId }) => {
                     });
                 }
 
-                // Clear notification after 5 seconds
-                setTimeout(() => setNotification(null), 5000);
+                // Notification handled by component auto-dismiss
             }
         };
 
@@ -122,7 +136,7 @@ const DockerDetails = ({ dockerData, agentName, serverId: propServerId }) => {
                 type: 'error',
                 message: error.response?.data?.message || 'Failed to send command'
             });
-            setTimeout(() => setNotification(null), 5000);
+            // Notification handled by component auto-dismiss
         }
     };
 
@@ -167,54 +181,16 @@ const DockerDetails = ({ dockerData, agentName, serverId: propServerId }) => {
     };
 
     return (
-        <div className="min-h-screen bg-bg-dark text-white p-4 md:p-8 pt-20" onClick={() => setActiveActionMenu(null)}>
+        <div className="text-white p-4" onClick={() => setActiveActionMenu(null)}>
             <div className="max-w-7xl mx-auto">
                 {/* Improved Notification Toast */}
-                {notification && (
-                    <div className={`fixed top-24 right-8 p-4 rounded-xl shadow-2xl flex items-center gap-4 z-50 animate-slide-in backdrop-blur-md border ${notification.type === 'success'
-                        ? 'bg-green-500/10 border-green-500/50 text-green-400'
-                        : 'bg-red-500/10 border-red-500/50 text-red-400'
-                        }`}>
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${notification.type === 'success' ? 'bg-green-500/20' : 'bg-red-500/20'
-                            }`}>
-                            <i className={`fas ${notification.type === 'success' ? 'fa-check' : 'fa-exclamation'} text-sm`}></i>
-                        </div>
-                        <div>
-                            <h4 className="font-bold text-sm">{notification.type === 'success' ? 'Success' : 'Error'}</h4>
-                            <p className="text-sm opacity-90">{notification.message}</p>
-                        </div>
-                        <button onClick={() => setNotification(null)} className="ml-2 hover:opacity-70">
-                            <i className="fas fa-times"></i>
-                        </button>
-                    </div>
-                )}
+                <Notification
+                    type={notification?.type}
+                    message={notification?.message}
+                    onClose={() => setNotification(null)}
+                />
 
-                {/* Header */}
-                <div className="mb-8">
-                    <button
-                        onClick={() => navigate(`/server/${serverId}`)}
-                        className="mb-4 flex items-center gap-2 text-accent hover:text-white transition-colors"
-                    >
-                        <i className="fas fa-arrow-left"></i> Back to Server Details
-                    </button>
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <h1 className="text-3xl font-bold flex items-center gap-3">
-                                <i className="fab fa-docker text-blue-400"></i>
-                                Docker Management
-                            </h1>
-                            <p className="text-text-secondary mt-2">
-                                Managing Docker on {localAgentName || 'Server'}
-                            </p>
-                        </div>
-                        {info && (
-                            <div className="glass p-4 rounded-xl">
-                                <div className="text-sm text-text-secondary">Docker Version</div>
-                                <div className="text-xl font-bold">{info.serverVersion}</div>
-                            </div>
-                        )}
-                    </div>
-                </div>
+                {/* Header Removed - handled by ServerLayout */}
 
                 {/* Stats Cards */}
                 {info && (
@@ -258,221 +234,16 @@ const DockerDetails = ({ dockerData, agentName, serverId: propServerId }) => {
                     </div>
                 )}
 
-                {/* Tabs */}
-                <div className="flex gap-2 mb-6">
-                    <button
-                        onClick={() => {
-                            setActiveTab('containers');
-                            navigate('.', { state: { ...location.state, activeTab: 'containers' }, replace: true });
-                        }}
-                        className={`px-6 py-3 rounded-lg font-medium transition-all ${activeTab === 'containers'
-                            ? 'bg-accent text-white'
-                            : 'glass text-text-secondary hover:text-white'
-                            }`}
-                    >
-                        <i className="fas fa-box mr-2"></i>
-                        Containers ({containers.length})
-                    </button>
-                    <button
-                        onClick={() => {
-                            setActiveTab('images');
-                            navigate('.', { state: { ...location.state, activeTab: 'images' }, replace: true });
-                        }}
-                        className={`px-6 py-3 rounded-lg font-medium transition-all ${activeTab === 'images'
-                            ? 'bg-accent text-white'
-                            : 'glass text-text-secondary hover:text-white'
-                            }`}
-                    >
-                        <i className="fas fa-layer-group mr-2"></i>
-                        Images ({images.length})
-                    </button>
-                    <button
-                        onClick={() => {
-                            setActiveTab('volumes');
-                            navigate('.', { state: { ...location.state, activeTab: 'volumes' }, replace: true });
-                        }}
-                        className={`px-6 py-3 rounded-lg font-medium transition-all ${activeTab === 'volumes'
-                            ? 'bg-accent text-white'
-                            : 'glass text-text-secondary hover:text-white'
-                            }`}
-                    >
-                        <i className="fas fa-database mr-2"></i>
-                        Volumes ({volumes.length})
-                    </button>
-                    <button
-                        onClick={() => {
-                            setActiveTab('networks');
-                            navigate('.', { state: { ...location.state, activeTab: 'networks' }, replace: true });
-                        }}
-                        className={`px-6 py-3 rounded-lg font-medium transition-all ${activeTab === 'networks'
-                            ? 'bg-accent text-white'
-                            : 'glass text-text-secondary hover:text-white'
-                            }`}
-                    >
-                        <i className="fas fa-network-wired mr-2"></i>
-                        Networks ({localDockerData.networks?.length || 0})
-                    </button>
-
+                {/* Tabs Removed - Handled by Sidebar */}
+                <div className="flex justify-end mb-6">
                     <button
                         onClick={() => setShowCreateModal(true)}
-                        className="ml-auto px-4 py-2 rounded-lg font-medium bg-green-500/20 text-green-400 hover:bg-green-500 hover:text-white transition-all border border-green-500/20 text-sm flex items-center gap-2"
+                        className="px-4 py-2 rounded-lg font-medium bg-green-500/20 text-green-400 hover:bg-green-500 hover:text-white transition-all border border-green-500/20 text-sm flex items-center gap-2"
                     >
                         <i className="fas fa-plus"></i>
                         Create Container
                     </button>
                 </div>
-
-                {/* Container Details Modal */}
-                {selectedContainer && (
-                    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4" onClick={() => setSelectedContainer(null)}>
-                        <div className="glass max-w-4xl w-full max-h-[85vh] overflow-y-auto rounded-xl p-6" onClick={(e) => e.stopPropagation()}>
-                            <div className="flex items-center justify-between mb-6">
-                                <h2 className="text-2xl font-bold flex items-center gap-2">
-                                    <i className="fas fa-box text-accent"></i>
-                                    {selectedContainer.name}
-                                </h2>
-                                <button
-                                    onClick={() => setSelectedContainer(null)}
-                                    className="text-text-secondary hover:text-white transition-colors"
-                                >
-                                    <i className="fas fa-times text-2xl"></i>
-                                </button>
-                            </div>
-
-                            <div className="space-y-6">
-                                {/* Basic Info */}
-                                <div>
-                                    <h3 className="text-lg font-bold mb-3 text-accent">Basic Information</h3>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="overflow-hidden">
-                                            <p className="text-text-secondary text-sm">Container ID</p>
-                                            <p className="font-mono text-sm truncate" title={selectedContainer.id}>{selectedContainer.id}</p>
-                                        </div>
-                                        <div className="overflow-hidden">
-                                            <p className="text-text-secondary text-sm">Image</p>
-                                            <p className="font-medium truncate" title={selectedContainer.image}>{selectedContainer.image}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-text-secondary text-sm">State</p>
-                                            <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${selectedContainer.state === 'running' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
-                                                }`}>
-                                                {selectedContainer.state}
-                                            </span>
-                                        </div>
-                                        <div>
-                                            <p className="text-text-secondary text-sm">Status</p>
-                                            <p>{selectedContainer.status || 'Unknown'}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-text-secondary text-sm">Created</p>
-                                            <p className="text-sm">{formatDate(selectedContainer.created)}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-text-secondary text-sm">Uptime</p>
-                                            <p className="text-sm">
-                                                {selectedContainer.state === 'running' && selectedContainer.started
-                                                    ? (() => {
-                                                        const started = new Date(selectedContainer.started * 1000);
-                                                        const now = new Date();
-                                                        const diff = Math.floor((now - started) / 1000);
-                                                        const hours = Math.floor(diff / 3600);
-                                                        const minutes = Math.floor((diff % 3600) / 60);
-                                                        return `${hours}h ${minutes}m`;
-                                                    })()
-                                                    : 'N/A'}
-                                            </p>
-                                        </div>
-                                        <div>
-                                            <p className="text-text-secondary text-sm">Restart Count</p>
-                                            <p>{selectedContainer.restartCount || 0}</p>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Resource Usage (if running) */}
-                                {selectedContainer.stats && (
-                                    <div>
-                                        <h3 className="text-lg font-bold mb-3 text-accent">Resource Usage</h3>
-                                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                                            <div className="bg-white/5 p-4 rounded-lg">
-                                                <p className="text-text-secondary text-sm">CPU Usage</p>
-                                                <p className="text-2xl font-bold text-blue-400">
-                                                    {selectedContainer.stats.cpuPercent.toFixed(2)}%
-                                                    <span className="text-xs text-text-secondary ml-1 font-normal">(of total capacity)</span>
-                                                </p>
-                                            </div>
-                                            <div className="bg-white/5 p-4 rounded-lg">
-                                                <p className="text-text-secondary text-sm">Memory Usage</p>
-                                                <p className="text-2xl font-bold text-purple-400">{selectedContainer.stats.memPercent.toFixed(2)}%</p>
-                                                <p className="text-xs text-text-secondary mt-1">
-                                                    {formatBytes(selectedContainer.stats.memUsage)} / {formatBytes(selectedContainer.stats.memLimit)}
-                                                </p>
-                                            </div>
-                                            <div className="bg-white/5 p-4 rounded-lg">
-                                                <p className="text-text-secondary text-sm">PIDs</p>
-                                                <p className="text-2xl font-bold text-green-400">{selectedContainer.stats.pids}</p>
-                                            </div>
-                                            <div className="bg-white/5 p-4 rounded-lg">
-                                                <p className="text-text-secondary text-sm">Network RX</p>
-                                                <p className="text-xl font-bold">{formatBytes(selectedContainer.stats.netIO.rx)}</p>
-                                            </div>
-                                            <div className="bg-white/5 p-4 rounded-lg">
-                                                <p className="text-text-secondary text-sm">Network TX</p>
-                                                <p className="text-xl font-bold">{formatBytes(selectedContainer.stats.netIO.wx)}</p>
-                                            </div>
-                                            <div className="bg-white/5 p-4 rounded-lg">
-                                                <p className="text-text-secondary text-sm">Block I/O</p>
-                                                <p className="text-sm">R: {formatBytes(selectedContainer.stats.blockIO.r)}</p>
-                                                <p className="text-sm">W: {formatBytes(selectedContainer.stats.blockIO.w)}</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Port Bindings */}
-                                {selectedContainer.ports && selectedContainer.ports.length > 0 && (
-                                    <div>
-                                        <h3 className="text-lg font-bold mb-3 text-accent">Port Bindings</h3>
-                                        <div className="bg-white/5 p-4 rounded-lg">
-                                            {selectedContainer.ports.map((port, idx) => (
-                                                <div key={idx} className="flex items-center gap-2 py-2 border-b border-white/10 last:border-0">
-                                                    <i className="fas fa-network-wired text-accent"></i>
-                                                    <span className="font-mono">
-                                                        {port.PublicPort ? `${port.PublicPort}:` : ''}{port.PrivatePort}/{port.Type}
-                                                    </span>
-                                                    {port.IP && <span className="text-xs text-text-secondary">({port.IP})</span>}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Volumes/Mounts */}
-                                {selectedContainer.mounts && selectedContainer.mounts.length > 0 && (
-                                    <div>
-                                        <h3 className="text-lg font-bold mb-3 text-accent">Volumes & Mounts</h3>
-                                        <div className="bg-white/5 p-4 rounded-lg space-y-2 max-h-60 overflow-y-auto">
-                                            {selectedContainer.mounts.map((mount, idx) => (
-                                                <div key={idx} className="p-3 bg-white/5 rounded border-l-2 border-purple-500">
-                                                    <div className="grid grid-cols-1 gap-1 text-sm">
-                                                        {Object.entries(mount).map(([key, value]) => (
-                                                            <div key={key} className="grid grid-cols-3 gap-2">
-                                                                <span className="text-text-secondary font-medium">{key}:</span>
-                                                                <span className="col-span-2 font-mono text-xs break-all">{String(value)}</span>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-
 
                 {/* Create Container Modal */}
                 {showCreateModal && (
@@ -807,93 +578,39 @@ const DockerDetails = ({ dockerData, agentName, serverId: propServerId }) => {
                                                     return 0;
                                                 })
                                                 .map((image) => (
-                                                    <tr key={image.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                                                    <tr
+                                                        key={image.id}
+                                                        className="border-b border-white/5 hover:bg-white/5 transition-colors cursor-pointer"
+                                                        onClick={() => {
+                                                            const imageName = image.repoTags && image.repoTags.length > 0
+                                                                ? image.repoTags.find(t => t !== '<none>:<none>') || image.repoTags[0]
+                                                                : image.id;
+                                                            // Encode image name to handle slashes in repo/tag
+                                                            navigate(`/server/${serverId}/docker/images/${encodeURIComponent(imageName)}`, {
+                                                                state: {
+                                                                    dockerData: localDockerData,
+                                                                    agentName: localAgentName
+                                                                }
+                                                            });
+                                                        }}
+                                                    >
                                                         <td className="p-3 font-mono text-sm text-text-secondary">
                                                             {image.id?.replace('sha256:', '').substring(0, 12) || 'N/A'}
                                                         </td>
-                                                        <td className="p-3 font-medium text-sm">
-                                                            {(() => {
-                                                                const tag = image.repoTags?.find(t => t !== '<none>:<none>');
-                                                                if (tag) {
-                                                                    return (
-                                                                        <button
-                                                                            onClick={() => navigate(`/server/${serverId}/docker/images/${encodeURIComponent(tag)}`, {
-                                                                                state: { dockerData: localDockerData, agentName: localAgentName }
-                                                                            })}
-                                                                            className="text-accent hover:underline text-left"
-                                                                        >
-                                                                            {tag}
-                                                                        </button>
-                                                                    );
-                                                                }
-                                                                return <span className="text-text-secondary italic">Untagged</span>;
-                                                            })()}
+                                                        <td className="p-3">
+                                                            <div className="font-medium text-blue-400 hover:text-blue-300 transition-colors underline">
+                                                                {image.repoTags && image.repoTags.length > 0
+                                                                    ? image.repoTags.filter(t => t !== '<none>:<none>').join(', ') || '<none>'
+                                                                    : '<none>'}
+                                                            </div>
                                                         </td>
-                                                        <td className="p-3 text-accent font-medium">{formatBytes(image.size)}</td>
-                                                        <td className="p-3">{image.architecture || 'N/A'}</td>
-                                                        <td className="p-3 text-sm text-text-secondary">
-                                                            {formatDate(image.created)}
-                                                        </td>
+                                                        <td className="p-3 text-sm">{formatBytes(image.size)}</td>
+                                                        <td className="p-3 text-sm">{image.architecture}</td>
+                                                        <td className="p-3 text-sm">{formatDate(image.created)}</td>
                                                     </tr>
                                                 ))}
                                         </tbody>
                                     </table>
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    {/* Networks Tab */}
-                    {activeTab === 'networks' && (
-                        <div>
-                            {(!localDockerData.networks || localDockerData.networks.length === 0) ? (
-                                <div className="text-center py-12">
-                                    <i className="fas fa-network-wired text-6xl text-white/10 mb-4"></i>
-                                    <p className="text-text-secondary">No networks found</p>
-                                </div>
-                            ) : (
-                                <div className="space-y-3">
-                                    {localDockerData.networks.map((network) => (
-                                        <div
-                                            key={network.id}
-                                            onClick={() => navigate(`/server/${serverId}/docker-details/network/${encodeURIComponent(network.name)}`, {
-                                                state: { dockerData: localDockerData, agentName: localAgentName }
-                                            })}
-                                            className="glass p-4 rounded-xl border-l-4 border-blue-500 cursor-pointer hover:bg-white/5 transition-all group flex items-center justify-between"
-                                        >
-                                            <div className="flex items-center gap-4">
-                                                <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center">
-                                                    <i className="fas fa-network-wired text-blue-400"></i>
-                                                </div>
-                                                <div>
-                                                    <h3 className="font-bold text-lg group-hover:text-accent transition-colors">{network.name}</h3>
-                                                    <p className="text-xs font-mono text-text-secondary">{network.id.substring(0, 12)}</p>
-                                                </div>
-                                            </div>
-
-                                            <div className="flex items-center gap-8 text-sm">
-                                                <div className="hidden md:block">
-                                                    <p className="text-text-secondary text-xs">Driver</p>
-                                                    <p className="font-medium">{network.driver}</p>
-                                                </div>
-                                                <div className="hidden md:block">
-                                                    <p className="text-text-secondary text-xs">Scope</p>
-                                                    <p className="font-medium">{network.scope}</p>
-                                                </div>
-                                                <div className="hidden md:block">
-                                                    <p className="text-text-secondary text-xs">Subnet</p>
-                                                    <p className="font-mono text-xs">{network.subnet || 'N/A'}</p>
-                                                </div>
-                                                <div className="text-right">
-                                                    <p className="text-text-secondary text-xs">Containers</p>
-                                                    <p className="font-bold text-white">{network.containers?.length || 0}</p>
-                                                </div>
-                                                <div className="text-accent opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <i className="fas fa-chevron-right"></i>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
                                 </div>
                             )}
                         </div>
@@ -908,37 +625,257 @@ const DockerDetails = ({ dockerData, agentName, serverId: propServerId }) => {
                                     <p className="text-text-secondary">No volumes found</p>
                                 </div>
                             ) : (
-                                <div className="space-y-4">
-                                    {volumes.map((volume) => (
-                                        <div key={volume.name} className="bg-white/5 p-4 rounded-lg border-l-4 border-purple-500">
-                                            <div className="flex items-start justify-between">
-                                                <div className="flex-1">
-                                                    <h3 className="font-bold text-lg mb-2">{volume.name}</h3>
-                                                    <div className="grid grid-cols-2 gap-4 text-sm">
-                                                        <div>
-                                                            <p className="text-text-secondary">Driver</p>
-                                                            <p className="font-medium">{volume.driver}</p>
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-text-secondary">Scope</p>
-                                                            <p className="font-medium">{volume.scope}</p>
-                                                        </div>
-                                                        <div className="col-span-2">
-                                                            <p className="text-text-secondary">Mountpoint</p>
-                                                            <p className="font-mono text-xs">{volume.mountpoint}</p>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
+                                <div className="overflow-x-auto">
+                                    <table className="w-full">
+                                        <thead>
+                                            <tr className="text-left text-text-secondary border-b border-white/10">
+                                                <th className="p-3">Name</th>
+                                                <th className="p-3">Driver</th>
+                                                <th className="p-3">Mount Point</th>
+                                                <th className="p-3">Created</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {volumes.map((volume) => (
+                                                <tr key={volume.name} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                                                    <td className="p-3 font-medium text-white">{volume.name}</td>
+                                                    <td className="p-3 text-sm text-text-secondary">{volume.driver}</td>
+                                                    <td className="p-3 font-mono text-xs text-text-secondary">{volume.mountpoint}</td>
+                                                    <td className="p-3 text-sm">{volume.createdAt || 'N/A'}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Networks Tab */}
+                    {activeTab === 'networks' && (
+                        <div>
+                            {localDockerData.networks && localDockerData.networks.length > 0 ? (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full">
+                                        <thead>
+                                            <tr className="text-left text-text-secondary border-b border-white/10">
+                                                <th className="p-3">Name</th>
+                                                <th className="p-3">Driver</th>
+                                                <th className="p-3">Scope</th>
+                                                <th className="p-3">Subnet</th>
+                                                <th className="p-3">Containers</th>
+                                                <th className="p-3">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {localDockerData.networks.map((network) => (
+                                                <tr
+                                                    key={network.id}
+                                                    className="border-b border-white/5 hover:bg-white/5 transition-colors cursor-pointer"
+                                                    onClick={() => navigate(`/server/${serverId}/docker-details/network/${encodeURIComponent(network.name)}`, {
+                                                        state: {
+                                                            dockerData: localDockerData,
+                                                            agentName: localAgentName
+                                                        }
+                                                    })}
+                                                >
+                                                    <td className="p-3 font-medium text-white">
+                                                        {network.name}
+                                                        <div className="text-xs text-text-secondary font-mono mt-1">{network.id.substring(0, 12)}</div>
+                                                    </td>
+                                                    <td className="p-3 text-sm text-text-secondary">{network.driver}</td>
+                                                    <td className="p-3 text-sm text-text-secondary">{network.scope}</td>
+                                                    <td className="p-3 font-mono text-xs text-text-secondary">
+                                                        {network.ipam?.config?.[0]?.subnet || '-'}
+                                                    </td>
+                                                    <td className="p-3">
+                                                        <span className={`px-2 py-1 rounded text-xs font-medium ${network.containers?.length > 0 ? 'bg-blue-500/20 text-blue-400' : 'bg-gray-500/20 text-gray-400'}`}>
+                                                            {network.containers?.length || 0} Containers
+                                                        </span>
+                                                    </td>
+                                                    <td className="p-3">
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                navigate(`/server/${serverId}/docker-details/network/${encodeURIComponent(network.name)}`, {
+                                                                    state: {
+                                                                        dockerData: localDockerData,
+                                                                        agentName: localAgentName
+                                                                    }
+                                                                });
+                                                            }}
+                                                            className="p-2 bg-blue-500/10 text-blue-400 rounded hover:bg-blue-500 hover:text-white transition-colors"
+                                                            title="View Details"
+                                                        >
+                                                            <i className="fas fa-external-link-alt"></i>
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            ) : (
+                                <div className="text-center py-12">
+                                    <i className="fas fa-network-wired text-6xl text-white/10 mb-4"></i>
+                                    <p className="text-text-secondary">No networks found</p>
                                 </div>
                             )}
                         </div>
                     )}
                 </div>
+
+                {/* Container Details Modal */}
+                {selectedContainer && (
+                    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4" onClick={() => setSelectedContainer(null)}>
+                        <div className="glass max-w-4xl w-full max-h-[85vh] overflow-y-auto rounded-xl p-6" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center justify-between mb-6">
+                                <h2 className="text-2xl font-bold flex items-center gap-2">
+                                    <i className="fas fa-box text-accent"></i>
+                                    {selectedContainer.name}
+                                </h2>
+                                <button
+                                    onClick={() => setSelectedContainer(null)}
+                                    className="text-text-secondary hover:text-white transition-colors"
+                                >
+                                    <i className="fas fa-times text-2xl"></i>
+                                </button>
+                            </div>
+
+                            <div className="space-y-6">
+                                {/* Basic Info */}
+                                <div>
+                                    <h3 className="text-lg font-bold mb-3 text-accent">Basic Information</h3>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="overflow-hidden">
+                                            <p className="text-text-secondary text-sm">Container ID</p>
+                                            <p className="font-mono text-sm truncate" title={selectedContainer.id}>{selectedContainer.id}</p>
+                                        </div>
+                                        <div className="overflow-hidden">
+                                            <p className="text-text-secondary text-sm">Image</p>
+                                            <p className="font-medium truncate" title={selectedContainer.image}>{selectedContainer.image}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-text-secondary text-sm">State</p>
+                                            <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${selectedContainer.state === 'running' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+                                                }`}>
+                                                {selectedContainer.state}
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <p className="text-text-secondary text-sm">Status</p>
+                                            <p>{selectedContainer.status || 'Unknown'}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-text-secondary text-sm">Created</p>
+                                            <p className="text-sm">{formatDate(selectedContainer.created)}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-text-secondary text-sm">Uptime</p>
+                                            <p className="text-sm">
+                                                {selectedContainer.state === 'running' && selectedContainer.started
+                                                    ? (() => {
+                                                        const started = new Date(selectedContainer.started * 1000);
+                                                        const now = new Date();
+                                                        const diff = Math.floor((now - started) / 1000);
+                                                        const hours = Math.floor(diff / 3600);
+                                                        const minutes = Math.floor((diff % 3600) / 60);
+                                                        return `${hours}h ${minutes}m`;
+                                                    })()
+                                                    : 'N/A'}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <p className="text-text-secondary text-sm">Restart Count</p>
+                                            <p>{selectedContainer.restartCount || 0}</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Resource Usage (if running) */}
+                                {selectedContainer.stats && (
+                                    <div>
+                                        <h3 className="text-lg font-bold mb-3 text-accent">Resource Usage</h3>
+                                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                            <div className="bg-white/5 p-4 rounded-lg">
+                                                <p className="text-text-secondary text-sm">CPU Usage</p>
+                                                <p className="text-2xl font-bold text-blue-400">
+                                                    {selectedContainer.stats.cpuPercent.toFixed(2)}%
+                                                    <span className="text-xs text-text-secondary ml-1 font-normal">(of total capacity)</span>
+                                                </p>
+                                            </div>
+                                            <div className="bg-white/5 p-4 rounded-lg">
+                                                <p className="text-text-secondary text-sm">Memory Usage</p>
+                                                <p className="text-2xl font-bold text-purple-400">{selectedContainer.stats.memPercent.toFixed(2)}%</p>
+                                                <p className="text-xs text-text-secondary mt-1">
+                                                    {formatBytes(selectedContainer.stats.memUsage)} / {formatBytes(selectedContainer.stats.memLimit)}
+                                                </p>
+                                            </div>
+                                            <div className="bg-white/5 p-4 rounded-lg">
+                                                <p className="text-text-secondary text-sm">PIDs</p>
+                                                <p className="text-2xl font-bold text-green-400">{selectedContainer.stats.pids}</p>
+                                            </div>
+                                            <div className="bg-white/5 p-4 rounded-lg">
+                                                <p className="text-text-secondary text-sm">Network RX</p>
+                                                <p className="text-xl font-bold">{formatBytes(selectedContainer.stats.netIO.rx)}</p>
+                                            </div>
+                                            <div className="bg-white/5 p-4 rounded-lg">
+                                                <p className="text-text-secondary text-sm">Network TX</p>
+                                                <p className="text-xl font-bold">{formatBytes(selectedContainer.stats.netIO.wx)}</p>
+                                            </div>
+                                            <div className="bg-white/5 p-4 rounded-lg">
+                                                <p className="text-text-secondary text-sm">Block I/O</p>
+                                                <p className="text-sm">R: {formatBytes(selectedContainer.stats.blockIO.r)}</p>
+                                                <p className="text-sm">W: {formatBytes(selectedContainer.stats.blockIO.w)}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Port Bindings */}
+                                {selectedContainer.ports && selectedContainer.ports.length > 0 && (
+                                    <div>
+                                        <h3 className="text-lg font-bold mb-3 text-accent">Port Bindings</h3>
+                                        <div className="bg-white/5 p-4 rounded-lg">
+                                            {selectedContainer.ports.map((port, idx) => (
+                                                <div key={idx} className="flex items-center gap-2 py-2 border-b border-white/10 last:border-0">
+                                                    <i className="fas fa-network-wired text-accent"></i>
+                                                    <span className="font-mono">
+                                                        {port.PublicPort ? `${port.PublicPort}:` : ''}{port.PrivatePort}/{port.Type}
+                                                    </span>
+                                                    {port.IP && <span className="text-xs text-text-secondary">({port.IP})</span>}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Volumes/Mounts */}
+                                {selectedContainer.mounts && selectedContainer.mounts.length > 0 && (
+                                    <div>
+                                        <h3 className="text-lg font-bold mb-3 text-accent">Volumes & Mounts</h3>
+                                        <div className="bg-white/5 p-4 rounded-lg space-y-2 max-h-60 overflow-y-auto">
+                                            {selectedContainer.mounts.map((mount, idx) => (
+                                                <div key={idx} className="p-3 bg-white/5 rounded border-l-2 border-purple-500">
+                                                    <div className="grid grid-cols-1 gap-1 text-sm">
+                                                        {Object.entries(mount).map(([key, value]) => (
+                                                            <div key={key} className="grid grid-cols-3 gap-2">
+                                                                <span className="text-text-secondary font-medium">{key}:</span>
+                                                                <span className="col-span-2 font-mono text-xs break-all">{String(value)}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
-        </div >
+        </div>
     );
 };
 

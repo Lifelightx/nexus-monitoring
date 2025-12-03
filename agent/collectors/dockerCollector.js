@@ -66,22 +66,45 @@ async function collectDockerData() {
 
         // Get Docker images
         const images = await si.dockerImages();
-        dockerData.images = images.map(img => ({
-            id: img.id,
-            container: img.container,
-            comment: img.comment,
-            os: img.os,
-            architecture: img.architecture,
-            parent: img.parent,
-            dockerVersion: img.dockerVersion,
-            size: img.size || 0,
-            sharedSize: img.sharedSize || 0,
-            virtualSize: img.virtualSize || 0,
-            author: img.author,
-            created: img.created,
-            repoTags: img.repoTags,
-            containerConfig: img.containerConfig,
-            config: img.config
+
+        // Fetch history for each image
+        const { exec } = require('child_process');
+        const util = require('util');
+        const execPromise = util.promisify(exec);
+
+        dockerData.images = await Promise.all(images.map(async (img) => {
+            let history = [];
+            try {
+                const { stdout } = await execPromise(`docker history --no-trunc --format "{{json .}}" ${img.id}`);
+                history = stdout.trim().split('\n').map(line => {
+                    try {
+                        return JSON.parse(line);
+                    } catch (e) {
+                        return null;
+                    }
+                }).filter(h => h);
+            } catch (e) {
+                // Ignore history errors
+            }
+
+            return {
+                id: img.id,
+                container: img.container,
+                comment: img.comment,
+                os: img.os,
+                architecture: img.architecture,
+                parent: img.parent,
+                dockerVersion: img.dockerVersion,
+                size: img.size || 0,
+                sharedSize: img.sharedSize || 0,
+                virtualSize: img.virtualSize || 0,
+                author: img.author,
+                created: img.created,
+                repoTags: img.repoTags,
+                containerConfig: img.containerConfig,
+                config: img.config,
+                history: history // Add history here
+            };
         }));
 
         // Get Docker volumes
@@ -132,7 +155,12 @@ async function collectDockerData() {
                 }));
             }
         } catch (netError) {
-            console.error('Error collecting docker networks:', netError.message);
+            if (netError.message.includes('The system cannot find the file specified') || netError.message.includes('Is the docker daemon running')) {
+                // Docker is likely not running, just ignore or log debug
+                // console.debug('Docker networks could not be collected (Docker might be down)');
+            } else {
+                console.error('Error collecting docker networks:', netError.message);
+            }
         }
 
         // Get Docker info

@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { Terminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import 'xterm/css/xterm.css';
-import { useSocket } from '../context/SocketContext';
+import { useSocket } from '../../context/SocketContext';
 
 const ContainerLogs = ({ containerId, agentId }) => {
     const terminalRef = useRef(null);

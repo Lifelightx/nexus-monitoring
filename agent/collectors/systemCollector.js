@@ -91,10 +91,16 @@ async function scanDisk(path) {
         } else {
             // Linux command
             // find . -type f -printf "%s %p\n" | sort -rn | head -n 50
+            // Added -mount to prevent crossing filesystem boundaries (optional but safer)
+            // Added error redirection to /dev/null to avoid cluttering stderr
             command = `find "${path}" -type f -printf "%s %p\\n" 2>/dev/null | sort -rn | head -n 50`;
         }
 
-        const { stdout } = await execPromise(command, { maxBuffer: 1024 * 1024 * 10 }); // 10MB buffer
+        const { stdout, stderr } = await execPromise(command, { maxBuffer: 1024 * 1024 * 10 }); // 10MB buffer
+
+        if (stderr && !stdout) {
+            console.warn(`Disk scan warning for ${path}: ${stderr}`);
+        }
 
         if (platform === 'win32') {
             const files = JSON.parse(stdout);
@@ -106,17 +112,28 @@ async function scanDisk(path) {
                 size: f.Length
             }));
         } else {
+            if (!stdout.trim()) return [];
+
             return stdout.split('\n')
                 .filter(line => line.trim())
                 .map(line => {
-                    const [size, ...pathParts] = line.trim().split(' ');
-                    const fullPath = pathParts.join(' ');
-                    return {
-                        name: fullPath.split('/').pop(),
-                        path: fullPath,
-                        size: parseInt(size, 10)
-                    };
-                });
+                    try {
+                        const firstSpaceIndex = line.trim().indexOf(' ');
+                        if (firstSpaceIndex === -1) return null;
+
+                        const size = line.trim().substring(0, firstSpaceIndex);
+                        const fullPath = line.trim().substring(firstSpaceIndex + 1);
+
+                        return {
+                            name: fullPath.split('/').pop(),
+                            path: fullPath,
+                            size: parseInt(size, 10)
+                        };
+                    } catch (e) {
+                        return null;
+                    }
+                })
+                .filter(f => f);
         }
     } catch (error) {
         console.error('Error scanning disk:', error);

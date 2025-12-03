@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useParams, useOutletContext } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { SocketProvider } from './context/SocketContext';
@@ -8,17 +8,25 @@ import Hero from './components/Hero';
 import Features from './components/Features';
 import Services from './components/Services';
 import Footer from './components/Footer';
-import Login from './pages/Login';
-import Signup from './pages/Signup';
-import DockerDetails from './pages/DockerDetails';
-import DockerImageDetails from './pages/DockerImageDetails';
-import DockerNetworkDetails from './pages/DockerNetworkDetails';
-import ContainerDetails from './pages/ContainerDetails';
-import Dashboard from './pages/Dashboard';
-import ServerDetails from './pages/ServerDetails';
-import FileExplorer from './pages/FileExplorer';
-import Containerization from './pages/Containerization';
+import Login from './pages/auth/Login';
+import Signup from './pages/auth/Signup';
+import DockerDetails from './pages/docker/DockerDetails';
+import DockerImageDetails from './pages/docker/DockerImageDetails';
+import DockerNetworkDetails from './pages/docker/DockerNetworkDetails';
+import ContainerDetails from './pages/docker/ContainerDetails';
+import Dashboard from './pages/dashboard/Dashboard';
+import ServerOverview from './pages/server/ServerOverview';
+import ServerMetrics from './pages/server/ServerMetrics';
+import ServerLogs from './pages/server/ServerLogs';
+import AgentInfo from './pages/server/AgentInfo';
+import FileExplorer from './pages/server/FileExplorer';
+import Containerization from './pages/docker/Containerization';
 import MainLayout from './layouts/MainLayout';
+import ServerLayout from './layouts/ServerLayout';
+import Metrics from './pages/dashboard/Metrics';
+import Alerts from './pages/dashboard/Alerts';
+import Settings from './pages/dashboard/Settings';
+import Servers from './pages/server/Servers';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -43,10 +51,18 @@ const LandingPage = () => (
 
 // Docker Details Wrapper to handle location state and params
 const DockerDetailsWrapper = () => {
-  const { serverId } = useParams();
+  const params = useParams();
+  // Handle both :id (from ServerLayout) and :serverId (direct access)
+  const serverId = params.id || params.serverId;
+  const { tab } = params; // Get tab from URL
   const location = useLocation();
-  const { dockerData, agentName } = location.state || {};
-  return <DockerDetails serverId={serverId} dockerData={dockerData} agentName={agentName} />;
+  const context = useOutletContext(); // Get context from ServerLayout
+
+  // Prefer data from location state, then context, then null
+  const dockerData = location.state?.dockerData || context?.metrics?.dockerDetails;
+  const agentName = location.state?.agentName || context?.agent?.name;
+
+  return <DockerDetails serverId={serverId} dockerData={dockerData} agentName={agentName} initialTab={tab} />;
 };
 
 // Docker Image Details Wrapper
@@ -81,19 +97,29 @@ function App() {
                 {/* Protected Routes wrapped in MainLayout */}
                 <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
                   <Route path="/dashboard" element={<Dashboard />} />
-                  <Route path="/server/:id" element={<ServerDetails />} />
-                  <Route path="/server/:serverId/docker-details" element={<DockerDetailsWrapper />} />
+                  <Route path="/servers" element={<Servers />} />
+                  <Route path="/metrics" element={<Metrics />} />
+                  <Route path="/alerts" element={<Alerts />} />
+                  <Route path="/settings" element={<Settings />} />
+
+                  {/* Server Routes wrapped in ServerLayout */}
+                  <Route path="/server/:id" element={<ServerLayout />}>
+                    <Route index element={<Navigate to="overview" replace />} />
+                    <Route path="overview" element={<ServerOverview />} />
+                    <Route path="metrics" element={<ServerMetrics />} />
+                    <Route path="docker" element={<Navigate to="containers" replace />} />
+                    <Route path="docker/:tab" element={<DockerDetailsWrapper />} />
+                    <Route path="logs" element={<ServerLogs />} />
+                    <Route path="agent-info" element={<AgentInfo />} />
+                    <Route path="files" element={<FileExplorer />} />
+                  </Route>
+
+                  {/* Docker sub-routes - kept accessible but ideally should be nested or handled better in future */}
                   <Route path="/server/:serverId/docker/images/:imageName" element={<DockerImageDetailsWrapper />} />
                   <Route path="/server/:serverId/docker-details/network/:networkName" element={<DockerNetworkDetailsWrapper />} />
                   <Route path="/server/:serverId/docker-details/:containerId" element={<ContainerDetails />} />
-                  <Route path="/server/:id/files" element={<FileExplorer />} />
 
-                  {/* Placeholder routes for sidebar links */}
-                  <Route path="/metrics" element={<div className="text-white p-8">Metrics Monitoring - Coming Soon</div>} />
                   <Route path="/containerization" element={<Containerization />} />
-                  <Route path="/servers" element={<Navigate to="/dashboard" />} />
-                  <Route path="/alerts" element={<div className="text-white p-8">Logs & Alerts - Coming Soon</div>} />
-                  <Route path="/settings" element={<div className="text-white p-8">Settings - Coming Soon</div>} />
                 </Route>
               </Routes>
             </div>

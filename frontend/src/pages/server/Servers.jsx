@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import axios from 'axios';
-import InstallationGuide from '../components/dashboard/InstallationGuide';
-import AddServerModal from '../components/dashboard/AddServerModal';
+import InstallationGuide from '../../components/dashboard/InstallationGuide';
+import AddServerModal from '../../components/dashboard/AddServerModal';
 
-const Dashboard = () => {
+const Servers = () => {
     const { showGuide, setShowGuide } = useOutletContext();
     const [showAddServerModal, setShowAddServerModal] = useState(false);
     const [agents, setAgents] = useState([]);
@@ -97,4 +97,4 @@ const Dashboard = () => {
     );
 };
 
-export default Dashboard;
+export default Servers;

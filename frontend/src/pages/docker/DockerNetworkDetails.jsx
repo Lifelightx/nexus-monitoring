@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import axios from 'axios';
-import { useSocket } from '../context/SocketContext';
+import { useSocket } from '../../context/SocketContext';
+import Notification from '../../components/Notification';
 
 const DockerNetworkDetails = ({ dockerData: propDockerData, agentName: propAgentName, serverId: propServerId }) => {
     const navigate = useNavigate();
@@ -60,7 +61,7 @@ const DockerNetworkDetails = ({ dockerData: propDockerData, agentName: propAgent
                     type: 'success',
                     message: response.data.message || 'Command sent successfully'
                 });
-                setTimeout(() => setNotification(null), 3000);
+                // Notification handled by component auto-dismiss
             }
             return { success: true, ...response.data };
         } catch (error) {
@@ -71,7 +72,7 @@ const DockerNetworkDetails = ({ dockerData: propDockerData, agentName: propAgent
                     type: 'error',
                     message: error.response?.data?.message || 'Failed to send command'
                 });
-                setTimeout(() => setNotification(null), 3000);
+                // Notification handled by component auto-dismiss
             }
             return { success: false, message: error.response?.data?.message || error.message };
         }
@@ -88,10 +89,10 @@ const DockerNetworkDetails = ({ dockerData: propDockerData, agentName: propAgent
             <div className="min-h-screen bg-bg-dark text-white p-8 pt-20">
                 <div className="max-w-7xl mx-auto">
                     <button
-                        onClick={() => navigate(`/server/${serverId}/docker-details`, { state: { dockerData: localDockerData, agentName: localAgentName, activeTab: 'networks' } })}
+                        onClick={() => navigate(`/server/${serverId}/docker/networks`, { state: { dockerData: localDockerData, agentName: localAgentName } })}
                         className="mb-4 flex items-center gap-2 text-accent hover:text-white transition-colors"
                     >
-                        <i className="fas fa-arrow-left"></i> Back to Docker Details
+                        <i className="fas fa-arrow-left"></i> Back to Networks
                     </button>
                     <div className="text-center py-12">
                         <i className="fas fa-network-wired text-6xl text-white/10 mb-4"></i>
@@ -123,19 +124,18 @@ const DockerNetworkDetails = ({ dockerData: propDockerData, agentName: propAgent
     return (
         <div className="min-h-screen bg-bg-dark text-white p-4 md:p-8 pt-20">
             <div className="max-w-7xl mx-auto">
-                {notification && (
-                    <div className={`fixed top-24 right-8 p-4 rounded-xl shadow-2xl z-50 animate-slide-in border ${notification.type === 'success' ? 'bg-green-500/10 border-green-500/50 text-green-400' : 'bg-red-500/10 border-red-500/50 text-red-400'
-                        }`}>
-                        {notification.message}
-                    </div>
-                )}
+                <Notification
+                    type={notification?.type}
+                    message={notification?.message}
+                    onClose={() => setNotification(null)}
+                />
 
                 <div className="mb-8">
                     <button
-                        onClick={() => navigate(`/server/${serverId}/docker-details`, { state: { dockerData: localDockerData, agentName: localAgentName, activeTab: 'networks' } })}
+                        onClick={() => navigate(`/server/${serverId}/docker/networks`, { state: { dockerData: localDockerData, agentName: localAgentName } })}
                         className="mb-4 flex items-center gap-2 text-accent hover:text-white transition-colors"
                     >
-                        <i className="fas fa-arrow-left"></i> Back to Docker Details
+                        <i className="fas fa-arrow-left"></i> Back to Networks
                     </button>
                     <div className="flex items-center justify-between">
                         <div>
@@ -169,7 +169,7 @@ const DockerNetworkDetails = ({ dockerData: propDockerData, agentName: propAgent
                                     } else {
                                         setNotification({ type: 'warning', message: `Started ${successCount} containers, failed to start ${failCount}` });
                                     }
-                                    setTimeout(() => setNotification(null), 3000);
+                                    // Notification handled by component auto-dismiss
                                 }}
                                 disabled={loadingAction?.networkId === network.id || stoppedContainers.length === 0}
                                 className="px-4 py-2 rounded-lg bg-green-500/20 text-green-400 hover:bg-green-500 hover:text-white transition-all border border-green-500/20 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -198,7 +198,7 @@ const DockerNetworkDetails = ({ dockerData: propDockerData, agentName: propAgent
                                     } else {
                                         setNotification({ type: 'warning', message: `Restarted ${successCount} containers, failed to restart ${failCount}` });
                                     }
-                                    setTimeout(() => setNotification(null), 3000);
+                                    // Notification handled by component auto-dismiss
                                 }}
                                 disabled={loadingAction?.networkId === network.id || connectedContainers.length === 0}
                                 className="px-4 py-2 rounded-lg bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500 hover:text-white transition-all border border-yellow-500/20 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -227,7 +227,7 @@ const DockerNetworkDetails = ({ dockerData: propDockerData, agentName: propAgent
                                     } else {
                                         setNotification({ type: 'warning', message: `Stopped ${successCount} containers, failed to stop ${failCount}` });
                                     }
-                                    setTimeout(() => setNotification(null), 3000);
+                                    // Notification handled by component auto-dismiss
                                 }}
                                 disabled={loadingAction?.networkId === network.id || runningContainers.length === 0}
                                 className="px-4 py-2 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white transition-all border border-red-500/20 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import axios from 'axios';
-import { useSocket } from '../context/SocketContext';
+import { useSocket } from '../../context/SocketContext';
+import Notification from '../../components/Notification';
 
 const DockerImageDetails = ({ dockerData: propDockerData, agentName: propAgentName, serverId: propServerId }) => {
     const navigate = useNavigate();
@@ -53,7 +54,7 @@ const DockerImageDetails = ({ dockerData: propDockerData, agentName: propAgentNa
                             type: 'success',
                             message: loadingAction.action === 'stopAll' ? 'All containers stopped' : 'All containers deleted'
                         });
-                        setTimeout(() => setNotification(null), 3000);
+                        // Notification handled by component auto-dismiss
 
                         if (loadingAction.action === 'deleteAll') {
                             setShowDeleteAllModal(false);
@@ -70,17 +71,17 @@ const DockerImageDetails = ({ dockerData: propDockerData, agentName: propAgentNa
                 if (data.success) {
                     setNotification({ type: 'success', message: data.message });
                     if (data.action === 'removeImage') {
-                        // Navigate back to docker details on successful image deletion
+                        // Navigate back to docker images list on successful image deletion
                         setTimeout(() => {
-                            navigate(`/server/${serverId}/docker-details`, {
-                                state: { dockerData: localDockerData, agentName: localAgentName, activeTab: 'images' }
+                            navigate(`/server/${serverId}/docker/images`, {
+                                state: { dockerData: localDockerData, agentName: localAgentName }
                             });
                         }, 1500);
                     }
                 } else {
                     setNotification({ type: 'error', message: data.message || 'Operation failed' });
                 }
-                setTimeout(() => setNotification(null), 3000);
+                // Notification handled by component auto-dismiss
             }
         };
 
@@ -130,8 +131,9 @@ const DockerImageDetails = ({ dockerData: propDockerData, agentName: propAgentNa
                 return;
             }
 
+            const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
             await axios.post(
-                `${import.meta.env.VITE_API_URL}/api/agents/${serverId}/docker/control`,
+                `${apiUrl}/api/agents/${serverId}/docker/control`,
                 { action, containerId: 'image-action', payload: { imageId } }, // Sending dummy containerId
                 { headers: { Authorization: `Bearer ${token}` } }
             );
@@ -189,24 +191,23 @@ const DockerImageDetails = ({ dockerData: propDockerData, agentName: propAgentNa
     return (
         <div className="min-h-screen bg-bg-dark text-white p-4 md:p-8 pt-20">
             <div className="max-w-7xl mx-auto">
-                {notification && (
-                    <div className={`fixed top-24 right-8 p-4 rounded-xl shadow-2xl z-50 animate-slide-in border ${notification.type === 'success' ? 'bg-green-500/10 border-green-500/50 text-green-400' : 'bg-red-500/10 border-red-500/50 text-red-400'
-                        }`}>
-                        {notification.message}
-                    </div>
-                )}
+                <Notification
+                    type={notification?.type}
+                    message={notification?.message}
+                    onClose={() => setNotification(null)}
+                />
 
                 <div className="mb-8">
                     <button
-                        onClick={() => navigate(`/server/${serverId}/docker-details`, { state: { dockerData: localDockerData, agentName: localAgentName, activeTab: 'images' } })}
+                        onClick={() => navigate(`/server/${serverId}/docker/images`, { state: { dockerData: localDockerData, agentName: localAgentName } })}
                         className="mb-4 flex items-center gap-2 text-accent hover:text-white transition-colors"
                     >
-                        <i className="fas fa-arrow-left"></i> Back to Docker Details
+                        <i className="fas fa-arrow-left"></i> Back to Images
                     </button>
                     <div className="flex items-center justify-between">
                         <div>
-                            <h1 className="text-3xl font-bold flex items-center gap-3">
-                                <i className="fas fa-layer-group text-blue-400"></i>
+                            <h1 className="text-3xl font-bold flex items-center gap-3 text-blue-400">
+                                <i className="fas fa-layer-group"></i>
                                 {imageName}
                             </h1>
                             <p className="text-text-secondary mt-2">
@@ -255,6 +256,8 @@ const DockerImageDetails = ({ dockerData: propDockerData, agentName: propAgentNa
                         </div>
                     </div>
                 </div>
+
+
 
                 <div className="glass p-6 rounded-xl">
                     <h2 className="text-xl font-bold mb-4">Containers</h2>
@@ -338,6 +341,44 @@ const DockerImageDetails = ({ dockerData: propDockerData, agentName: propAgentNa
                                 </tbody>
                             </table>
                         </div>
+                    )}
+                </div>
+
+                <div className="glass p-6 rounded-xl mt-8">
+                    <h2 className="text-xl font-bold mb-4">Image Layers</h2>
+                    {imageObj?.history && imageObj.history.length > 0 ? (
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className="text-left text-text-secondary border-b border-white/10">
+                                        <th className="p-3">Created</th>
+                                        <th className="p-3">Created By</th>
+                                        <th className="p-3">Size</th>
+                                        <th className="p-3">Comment</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {imageObj.history.map((layer, idx) => (
+                                        <tr key={idx} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                                            <td className="p-3 whitespace-nowrap text-text-secondary">
+                                                {layer.CreatedSince}
+                                            </td>
+                                            <td className="p-3 font-mono text-xs max-w-md truncate" title={layer.CreatedBy}>
+                                                {layer.CreatedBy}
+                                            </td>
+                                            <td className="p-3 font-mono">
+                                                {layer.Size}
+                                            </td>
+                                            <td className="p-3 text-text-secondary max-w-xs truncate" title={layer.Comment}>
+                                                {layer.Comment}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    ) : (
+                        <p className="text-text-secondary">No layer history available.</p>
                     )}
                 </div>
             </div>
