@@ -66,8 +66,11 @@ const DockerDetailsWrapper = () => {
 };
 
 // Docker Image Details Wrapper
+// Docker Image Details Wrapper
 const DockerImageDetailsWrapper = () => {
-  const { serverId, imageName } = useParams();
+  const params = useParams();
+  const serverId = params.serverId || params.id;
+  const { imageName } = params;
   const location = useLocation();
   const { dockerData, agentName } = location.state || {};
   return <DockerImageDetails serverId={serverId} imageName={imageName} dockerData={dockerData} agentName={agentName} />;
@@ -75,10 +78,22 @@ const DockerImageDetailsWrapper = () => {
 
 // Docker Network Details Wrapper
 const DockerNetworkDetailsWrapper = () => {
-  const { serverId, networkName } = useParams();
+  const params = useParams();
+  const serverId = params.serverId || params.id;
+  const { networkName } = params;
   const location = useLocation();
   const { dockerData, agentName } = location.state || {};
   return <DockerNetworkDetails serverId={serverId} networkName={networkName} dockerData={dockerData} agentName={agentName} />;
+};
+
+// Container Details Wrapper
+const ContainerDetailsWrapper = () => {
+  const params = useParams();
+  const serverId = params.serverId || params.id;
+  const { containerName } = params;
+  const location = useLocation();
+  const { containerId, agentName } = location.state || {};
+  return <ContainerDetails serverId={serverId} containerName={containerName} containerId={containerId} agentName={agentName} />;
 };
 
 function App() {
@@ -109,15 +124,13 @@ function App() {
                     <Route path="metrics" element={<ServerMetrics />} />
                     <Route path="docker" element={<Navigate to="containers" replace />} />
                     <Route path="docker/:tab" element={<DockerDetailsWrapper />} />
+                    <Route path="docker/images/:imageName" element={<DockerImageDetailsWrapper />} />
+                    <Route path="docker/networks/:networkName" element={<DockerNetworkDetailsWrapper />} />
+                    <Route path="docker/containers/:containerName" element={<ContainerDetailsWrapper />} />
                     <Route path="logs" element={<ServerLogs />} />
                     <Route path="agent-info" element={<AgentInfo />} />
                     <Route path="files" element={<FileExplorer />} />
                   </Route>
-
-                  {/* Docker sub-routes - kept accessible but ideally should be nested or handled better in future */}
-                  <Route path="/server/:serverId/docker/images/:imageName" element={<DockerImageDetailsWrapper />} />
-                  <Route path="/server/:serverId/docker-details/network/:networkName" element={<DockerNetworkDetailsWrapper />} />
-                  <Route path="/server/:serverId/docker-details/:containerId" element={<ContainerDetails />} />
 
                   <Route path="/containerization" element={<Containerization />} />
                 </Route>

@@ -44,8 +44,8 @@ const controlDockerContainer = async (req, res) => {
         const { action, containerId, payload } = req.body;
 
         // Validate action
-        if (!['start', 'stop', 'restart', 'create', 'remove', 'removeImage'].includes(action)) {
-            return res.status(400).json({ message: 'Invalid action. Must be start, stop, restart, create, remove, or removeImage' });
+        if (!['start', 'stop', 'restart', 'create', 'remove', 'removeImage', 'removeNetwork'].includes(action)) {
+            return res.status(400).json({ message: 'Invalid action. Must be start, stop, restart, create, remove, removeImage, or removeNetwork' });
         }
 
         if (action !== 'create' && !containerId) {

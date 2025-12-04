@@ -6,7 +6,9 @@ const si = require('systeminformation');
  */
 async function collectSystemMetrics() {
     try {
+        const cpu = await si.cpu();
         const cpuLoad = await si.currentLoad();
+        const cpuTemp = await si.cpuTemperature();
         const mem = await si.mem();
         const networkStats = await si.networkStats();
         const time = si.time();
@@ -14,6 +16,7 @@ async function collectSystemMetrics() {
         const networkInterfaces = await si.networkInterfaces();
         const fsSize = await si.fsSize();
         const processes = await si.processes();
+        const loadAvg = require('os').loadavg();
 
         // Get main IP
         const mainInterface = networkInterfaces.find(i => !i.internal && i.ip4) || networkInterfaces[0];
@@ -23,6 +26,11 @@ async function collectSystemMetrics() {
                 load: cpuLoad.currentLoad,
                 user: cpuLoad.currentLoadUser,
                 sys: cpuLoad.currentLoadSystem,
+                cores: cpu.cores,
+                physicalCores: cpu.physicalCores,
+                processors: cpuLoad.cpus.map(c => c.load),
+                temperature: cpuTemp.main,
+                loadAvg: loadAvg
             },
             memory: {
                 total: mem.total,

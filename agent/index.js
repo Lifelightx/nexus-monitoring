@@ -105,6 +105,9 @@ socket.on('docker:control', async (data) => {
             case 'removeImage':
                 command = `docker rmi ${data.payload.imageId}`;
                 break;
+            case 'removeNetwork':
+                command = `docker network rm ${containerId}`;
+                break;
             default:
                 throw new Error(`Unknown action: ${action}`);
         }

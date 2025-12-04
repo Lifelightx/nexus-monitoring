@@ -79,14 +79,14 @@ const DockerNetworkDetails = ({ dockerData: propDockerData, agentName: propAgent
     };
 
     if (!localDockerData) {
-        return <div className="min-h-screen bg-bg-dark text-white p-8 pt-20 flex justify-center">Loading...</div>;
+        return <div className="text-white p-8 flex justify-center">Loading...</div>;
     }
 
     const network = localDockerData.networks?.find(n => n.name === networkName);
 
     if (!network) {
         return (
-            <div className="min-h-screen bg-bg-dark text-white p-8 pt-20">
+            <div className="text-white p-8">
                 <div className="max-w-7xl mx-auto">
                     <button
                         onClick={() => navigate(`/server/${serverId}/docker/networks`, { state: { dockerData: localDockerData, agentName: localAgentName } })}
@@ -122,7 +122,7 @@ const DockerNetworkDetails = ({ dockerData: propDockerData, agentName: propAgent
     const stoppedContainers = connectedContainers.filter(c => c.state !== 'running');
 
     return (
-        <div className="min-h-screen bg-bg-dark text-white p-4 md:p-8 pt-20">
+        <div className="text-white p-4 md:p-8">
             <div className="max-w-7xl mx-auto">
                 <Notification
                     type={notification?.type}

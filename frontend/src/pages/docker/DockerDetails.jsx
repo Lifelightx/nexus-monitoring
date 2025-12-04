@@ -431,8 +431,9 @@ const DockerDetails = ({ dockerData, agentName, serverId: propServerId, initialT
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
                                                                     if (container.state === 'running') {
-                                                                        navigate(`/server/${serverId}/docker-details/${container.id}`, {
+                                                                        navigate(`/server/${serverId}/docker/containers/${encodeURIComponent(container.name)}`, {
                                                                             state: {
+                                                                                containerId: container.id,
                                                                                 containerName: container.name,
                                                                                 dockerData: localDockerData,
                                                                                 agentName: localAgentName
@@ -672,7 +673,7 @@ const DockerDetails = ({ dockerData, agentName, serverId: propServerId, initialT
                                                 <tr
                                                     key={network.id}
                                                     className="border-b border-white/5 hover:bg-white/5 transition-colors cursor-pointer"
-                                                    onClick={() => navigate(`/server/${serverId}/docker-details/network/${encodeURIComponent(network.name)}`, {
+                                                    onClick={() => navigate(`/server/${serverId}/docker/networks/${encodeURIComponent(network.name)}`, {
                                                         state: {
                                                             dockerData: localDockerData,
                                                             agentName: localAgentName
@@ -697,17 +698,19 @@ const DockerDetails = ({ dockerData, agentName, serverId: propServerId, initialT
                                                         <button
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
-                                                                navigate(`/server/${serverId}/docker-details/network/${encodeURIComponent(network.name)}`, {
-                                                                    state: {
-                                                                        dockerData: localDockerData,
-                                                                        agentName: localAgentName
-                                                                    }
-                                                                });
+                                                                if (confirm(`Are you sure you want to delete network "${network.name}"?`)) {
+                                                                    handleDockerControl(network.id, 'removeNetwork');
+                                                                }
                                                             }}
-                                                            className="p-2 bg-blue-500/10 text-blue-400 rounded hover:bg-blue-500 hover:text-white transition-colors"
-                                                            title="View Details"
+                                                            disabled={loadingAction?.containerId === network.id}
+                                                            className="p-2 bg-red-500/10 text-red-400 rounded hover:bg-red-500 hover:text-white transition-colors"
+                                                            title="Delete Network"
                                                         >
-                                                            <i className="fas fa-external-link-alt"></i>
+                                                            {loadingAction?.containerId === network.id && loadingAction?.action === 'removeNetwork' ? (
+                                                                <i className="fas fa-spinner fa-spin"></i>
+                                                            ) : (
+                                                                <i className="fas fa-trash"></i>
+                                                            )}
                                                         </button>
                                                     </td>
                                                 </tr>

@@ -189,7 +189,7 @@ const DockerImageDetails = ({ dockerData: propDockerData, agentName: propAgentNa
     };
 
     return (
-        <div className="min-h-screen bg-bg-dark text-white p-4 md:p-8 pt-20">
+        <div className="text-white p-4 md:p-8">
             <div className="max-w-7xl mx-auto">
                 <Notification
                     type={notification?.type}
