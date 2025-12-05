@@ -1,11 +1,99 @@
 const si = require('systeminformation');
 
+let cachedSecurityMetrics = {
+    failedLogins: [],
+    sudoUsage: []
+};
+let lastSecurityUpdate = 0;
+const SECURITY_UPDATE_INTERVAL = 60000; // Update every 1 minute
+
+/**
+ * Collect security metrics (logs, failed logins)
+ * @returns {Promise<Object>} Security metrics
+ */
+async function collectSecurityMetrics() {
+    const { exec } = require('child_process');
+    const util = require('util');
+    const execPromise = util.promisify(exec);
+    const platform = require('os').platform();
+
+    const metrics = {
+        failedLogins: [],
+        sudoUsage: []
+    };
+
+    try {
+        if (platform === 'linux') {
+            // Linux: Failed logins (lastb)
+            try {
+                const { stdout: lastbOut } = await execPromise('lastb -n 5 -a | head -n 5', { timeout: 2000 }).catch(() => ({ stdout: '' }));
+                if (lastbOut) {
+                    metrics.failedLogins = lastbOut.split('\n').filter(l => l.trim()).map(l => {
+                        const parts = l.split(/\s+/);
+                        return {
+                            user: parts[0],
+                            source: parts[parts.length - 1],
+                            time: l.substring(l.indexOf(parts[2]), l.indexOf(parts[parts.length - 1])).trim()
+                        };
+                    });
+                }
+            } catch (e) { /* Ignore permission errors */ }
+
+            // Linux: Sudo usage (auth.log)
+            try {
+                // Try reading auth.log (requires root usually)
+                const { stdout: sudoOut } = await execPromise('grep "sudo" /var/log/auth.log | tail -n 5', { timeout: 2000 }).catch(() => ({ stdout: '' }));
+                if (sudoOut) {
+                    metrics.sudoUsage = sudoOut.split('\n').filter(l => l.trim()).map(l => ({
+                        raw: l.substring(0, 100) // Truncate for safety
+                    }));
+                }
+            } catch (e) { /* Ignore permission errors */ }
+
+        } else if (platform === 'win32') {
+            // Windows: Failed Logins (Event 4625)
+            try {
+                const psCmd = `Get-EventLog -LogName Security -InstanceId 4625 -Newest 5 | Select-Object TimeGenerated, Message | ConvertTo-Json`;
+                const { stdout } = await execPromise(`powershell -Command "${psCmd.replace(/"/g, '\\"')}"`, { timeout: 5000 }).catch(() => ({ stdout: '' }));
+                if (stdout.trim()) {
+                    const events = JSON.parse(stdout);
+                    const list = Array.isArray(events) ? events : [events];
+                    metrics.failedLogins = list.map(e => ({
+                        time: e.TimeGenerated,
+                        message: 'Failed Login Attempt' // Message is too long usually
+                    }));
+                }
+            } catch (e) { /* Ignore */ }
+        }
+    } catch (error) {
+        console.error('Error collecting security metrics:', error.message);
+    }
+
+    return metrics;
+}
+
+/**
+ * Update security metrics in background
+ */
+function updateSecurityMetricsIfNeeded() {
+    const now = Date.now();
+    if (now - lastSecurityUpdate > SECURITY_UPDATE_INTERVAL) {
+        lastSecurityUpdate = now;
+        collectSecurityMetrics().then(metrics => {
+            cachedSecurityMetrics = metrics;
+        }).catch(err => console.error('Background security update failed:', err));
+    }
+}
+
 /**
  * Collect system metrics (CPU, Memory, Network)
  * @returns {Promise<Object>} System metrics object
  */
 async function collectSystemMetrics() {
     try {
+        // Trigger background update for security metrics
+        updateSecurityMetricsIfNeeded();
+
         const cpu = await si.cpu();
         const cpuLoad = await si.currentLoad();
         const cpuTemp = await si.cpuTemperature();
@@ -16,10 +104,18 @@ async function collectSystemMetrics() {
         const networkInterfaces = await si.networkInterfaces();
         const fsSize = await si.fsSize();
         const processes = await si.processes();
+        const users = await si.users();
         const loadAvg = require('os').loadavg();
+
+        // Use cached security metrics immediately
+        const security = cachedSecurityMetrics;
 
         // Get main IP
         const mainInterface = networkInterfaces.find(i => !i.internal && i.ip4) || networkInterfaces[0];
+
+        // Process Lists
+        const topCpu = [...processes.list].sort((a, b) => b.cpu - a.cpu).slice(0, 5);
+        const topMem = [...processes.list].sort((a, b) => b.mem - a.mem).slice(0, 5);
 
         return {
             cpu: {
@@ -46,6 +142,8 @@ async function collectSystemMetrics() {
                 tx_sec: iface.tx_sec,
             })),
             uptime: time.uptime,
+            agentUptime: process.uptime(),
+            bootTime: time.uptime ? Date.now() - (time.uptime * 1000) : null,
             os: {
                 platform: osInfo.platform,
                 distro: osInfo.distro,
@@ -68,8 +166,11 @@ async function collectSystemMetrics() {
                 running: processes.running,
                 blocked: processes.blocked,
                 sleeping: processes.sleeping,
-                list: processes.list.sort((a, b) => b.cpu - a.cpu).slice(0, 5) // Top 5 by CPU
-            }
+                topCpu,
+                topMem
+            },
+            users,
+            security
         };
     } catch (error) {
         console.error('Error collecting system metrics:', error);

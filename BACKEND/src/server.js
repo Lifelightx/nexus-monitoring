@@ -47,6 +47,7 @@ app.use('/api/agents', agentRoutes);
 app.use('/api/agents', dockerRoutes);
 app.use('/api/install', require('./routes/installRoutes'));
 app.use('/api/agents', require('./routes/systemRoutes'));
+app.use('/api/metrics', require('./routes/metricRoutes'));
 app.use('/api/deploy', require('./routes/deployRoutes'));
 
 app.get('/', (req, res) => {
