@@ -50,6 +50,25 @@ router.get('/script', (req, res) => {
     res.sendFile(path.join(__dirname, '../../public/install.sh'));
 });
 
+// Serve the Windows PowerShell install script
+/**
+ * @swagger
+ * /api/install/script/windows:
+ *   get:
+ *     summary: Get the Windows PowerShell installation script
+ *     tags: [Install]
+ *     responses:
+ *       200:
+ *         description: The Windows PowerShell installation script
+ *         content:
+ *           text/plain:
+ *             schema:
+ *               type: string
+ */
+router.get('/script/windows', (req, res) => {
+    res.sendFile(path.join(__dirname, '../../public/install.ps1'));
+});
+
 // Serve agent files
 /**
  * @swagger

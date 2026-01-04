@@ -2,11 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import axios from 'axios';
 import { API_BASE_URL } from '../../config';
+import { useSocket } from '../../context/SocketContext';
 import InstallationGuide from '../../components/dashboard/InstallationGuide';
 import AddServerModal from '../../components/dashboard/AddServerModal';
 
 const Dashboard = () => {
     const { showGuide, setShowGuide } = useOutletContext();
+    const socket = useSocket();
     const [agents, setAgents] = useState([]);
     const [metrics, setMetrics] = useState({
         totalContainers: 0,
@@ -23,45 +25,80 @@ const Dashboard = () => {
             });
             const agentsData = res.data;
             setAgents(agentsData);
-
-            // Calculate aggregated metrics
-            let totalContainers = 0;
-            let runningContainers = 0;
-            let totalCpuLoad = 0;
-            let onlineServers = 0;
-
-            agentsData.forEach(agent => {
-                if (agent.status === 'online') {
-                    onlineServers++;
-                    // Assuming agent.dockerDetails contains container info if available
-                    // Note: The /api/agents endpoint might not return full docker details for all agents list
-                    // We might need to rely on what's available or fetch details.
-                    // For now, let's assume basic stats are available or we use what we have.
-                    // If the list endpoint doesn't return docker stats, we might need to adjust the backend or fetch individually.
-                    // Checking previous agent data structure... usually it has basic info.
-
-                    // If docker info is not in the list response, we'll display 0 or placeholders.
-                    // Let's assume for this step we display what we can.
-                }
-            });
-
-            setMetrics({
-                totalContainers,
-                runningContainers,
-                totalCpuLoad,
-                onlineServers
-            });
+            calculateMetrics(agentsData);
 
         } catch (err) {
             console.error('Error fetching agents:', err);
         }
     };
 
+    const calculateMetrics = (agentsData) => {
+        let totalContainers = 0;
+        let runningContainers = 0;
+        let totalCpuLoad = 0;
+        let onlineServers = 0;
+
+        agentsData.forEach(agent => {
+            if (agent.status === 'online') {
+                onlineServers++;
+                // Assuming agent.dockerDetails contains container info if available
+                // Note: The /api/agents endpoint might not return full docker details for all agents list
+                // We might need to rely on what's available or fetch details.
+                // For now, let's assume basic stats are available or we use what we have.
+                // If the list endpoint doesn't return docker stats, we might need to adjust the backend or fetch individually.
+                // Checking previous agent data structure... usually it has basic info.
+
+                // If docker info is not in the list response, we'll display 0 or placeholders.
+                // Let's assume for this step we display what we can.
+            }
+        });
+
+        setMetrics({
+            totalContainers,
+            runningContainers,
+            totalCpuLoad,
+            onlineServers
+        });
+    };
+
     useEffect(() => {
+        // Initial fetch on mount
         fetchAgents();
-        const interval = setInterval(fetchAgents, 5000);
-        return () => clearInterval(interval);
-    }, []);
+
+        // Subscribe to WebSocket updates
+        if (socket) {
+            // Subscribe to agent list updates
+            socket.emit('agent:list:subscribe');
+
+            // Listen for agent list updates
+            const handleAgentListUpdate = (agentList) => {
+                console.log('Received agent list update:', agentList);
+                setAgents(agentList);
+                calculateMetrics(agentList);
+            };
+
+            // Listen for individual agent updates
+            const handleAgentUpdate = (updatedAgent) => {
+                console.log('Received agent update:', updatedAgent);
+                setAgents(prev => {
+                    const updated = prev.map(a =>
+                        a._id === updatedAgent._id ? updatedAgent : a
+                    );
+                    calculateMetrics(updated);
+                    return updated;
+                });
+            };
+
+            socket.on('agent:list:updated', handleAgentListUpdate);
+            socket.on('agent:updated', handleAgentUpdate);
+
+            // Cleanup listeners on unmount
+            return () => {
+                socket.off('agent:list:updated', handleAgentListUpdate);
+                socket.off('agent:updated', handleAgentUpdate);
+            };
+        }
+    }, [socket]);
 
     return (
         <div>

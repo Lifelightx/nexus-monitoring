@@ -5,7 +5,32 @@ const logger = require('../utils/logger');
 module.exports = (io, app) => {
     const agents = new Map(); // socketId -> agentData
     const agentSockets = app.get('agentSockets'); // agentId -> socketId
+    const dashboardClients = new Set(); // Set of dashboard socket IDs
     const jwt = require('jsonwebtoken');
+
+    // Helper function to broadcast agent list to all dashboard clients
+    const broadcastAgentList = async () => {
+        try {
+            const agentList = await Agent.find({}).select('-__v').lean();
+            io.to('dashboards').emit('agent:list:updated', agentList);
+            logger.info(`Broadcasted agent list to ${dashboardClients.size} dashboard clients`);
+        } catch (err) {
+            logger.error('Error broadcasting agent list:', err.message);
+        }
+    };
+
+    // Helper function to broadcast specific agent update
+    const broadcastAgentUpdate = async (agentId) => {
+        try {
+            const agent = await Agent.findById(agentId).select('-__v').lean();
+            if (agent) {
+                io.to('dashboards').emit('agent:updated', agent);
+                logger.info(`Broadcasted update for agent: ${agent.name} `);
+            }
+        } catch (err) {
+            logger.error('Error broadcasting agent update:', err.message);
+        }
+    };
 
     // Authentication Middleware
     io.use((socket, next) => {
@@ -40,12 +65,27 @@ module.exports = (io, app) => {
     io.on('connection', (socket) => {
         const auth = socket.handshake.auth;
         const agentName = auth.agentName;
-        const clientType = agentName ? `Agent (${agentName})` : 'Dashboard/UI';
+        const clientType = agentName ? `Agent(${agentName})` : 'Dashboard/UI';
 
         logger.info(`New Connection: ${clientType}`, { socketId: socket.id, ip: socket.handshake.address });
 
+        // Dashboard subscription
+        socket.on('agent:list:subscribe', async () => {
+            socket.join('dashboards');
+            dashboardClients.add(socket.id);
+            logger.info(`Dashboard client subscribed: ${socket.id}`);
+
+            // Send initial agent list
+            try {
+                const agentList = await Agent.find({}).select('-__v').lean();
+                socket.emit('agent:list:updated', agentList);
+            } catch (err) {
+                logger.error('Error sending initial agent list:', err.message);
+            }
+        });
+
         socket.on('agent:register', async (data) => {
-            logger.info(`Agent Registered: ${data.name}`, { socketId: socket.id });
+            logger.info(`Agent Registered: ${data.name} `, { socketId: socket.id });
 
             try {
                 // Upsert Agent in DB
@@ -65,6 +105,9 @@ module.exports = (io, app) => {
 
                 // Store socket mapping for Docker control
                 agentSockets.set(agent._id.toString(), socket.id);
+
+                // Broadcast updated agent list to all dashboards
+                await broadcastAgentList();
 
                 // Broadcast new agent list to admins (optional, for future)
             } catch (err) {
@@ -104,10 +147,14 @@ module.exports = (io, app) => {
         });
 
         // Handle Docker control results from agent
-        socket.on('docker:control:result', (data) => {
+        socket.on('docker:control:result', async (data) => {
             logger.info('Docker control result:', data);
             // Broadcast result to all connected dashboards
             io.emit('docker:control:result', data);
+
+            // Broadcast updated agent list after Docker operation completes
+            // This ensures dashboards get the latest container states
+            await broadcastAgentList();
         });
 
         // --- Docker Logs & Terminal Forwarding (Agent -> Dashboard) ---
@@ -149,6 +196,12 @@ module.exports = (io, app) => {
         socket.on('docker:terminal:stop', forwardToAgent('docker:terminal:stop'));
 
         socket.on('disconnect', async () => {
+            // Remove from dashboard clients if it was a dashboard
+            if (dashboardClients.has(socket.id)) {
+                dashboardClients.delete(socket.id);
+                logger.info(`Dashboard client disconnected: ${socket.id}`);
+            }
+
             if (agents.has(socket.id)) {
                 const agentInfo = agents.get(socket.id);
                 logger.info(`Agent disconnected: ${agentInfo.name}`, { socketId: socket.id });
@@ -156,6 +209,9 @@ module.exports = (io, app) => {
                 // Mark agent as offline
                 try {
                     await Agent.findByIdAndUpdate(agentInfo._id, { status: 'offline' });
+
+                    // Broadcast updated agent list to all dashboards
+                    await broadcastAgentList();
                 } catch (err) {
                     logger.error('Error updating agent status:', err.message);
                 }

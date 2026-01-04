@@ -99,13 +99,24 @@ const DockerDetails = ({ dockerData, agentName, serverId: propServerId, initialT
             }
         };
 
+        const handleAgentUpdate = (updatedAgent) => {
+            // Check if update is for the current agent
+            if (updatedAgent._id === serverId) {
+                console.log('Received immediate agent update:', updatedAgent);
+                // The agent update from backend may not include full dockerDetails
+                // We rely on dashboard:update for that, but this ensures we get quick status updates
+            }
+        };
+
         // Listen for general dashboard updates (metrics)
         socket.on('dashboard:update', handleDashboardUpdate);
         socket.on('docker:control:result', handleControlResult);
+        socket.on('agent:updated', handleAgentUpdate);
 
         return () => {
             socket.off('dashboard:update', handleDashboardUpdate);
             socket.off('docker:control:result', handleControlResult);
+            socket.off('agent:updated', handleAgentUpdate);
         };
     }, [loadingAction, serverId, socket]);
 

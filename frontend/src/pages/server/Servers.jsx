@@ -2,11 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import axios from 'axios';
 import { API_BASE_URL } from '../../config';
+import { useSocket } from '../../context/SocketContext';
 import InstallationGuide from '../../components/dashboard/InstallationGuide';
 import AddServerModal from '../../components/dashboard/AddServerModal';
 
 const Servers = () => {
     const { showGuide, setShowGuide } = useOutletContext();
+    const socket = useSocket();
     const [showAddServerModal, setShowAddServerModal] = useState(false);
     const [agents, setAgents] = useState([]);
     const navigate = useNavigate();
@@ -24,10 +26,38 @@ const Servers = () => {
     };
 
     useEffect(() => {
+        // Initial fetch on mount
         fetchAgents();
-        const interval = setInterval(fetchAgents, 5000);
-        return () => clearInterval(interval);
-    }, []);
+
+        // Subscribe to WebSocket updates
+        if (socket) {
+            // Subscribe to agent list updates
+            socket.emit('agent:list:subscribe');
+
+            // Listen for agent list updates
+            const handleAgentListUpdate = (agentList) => {
+                console.log('Received agent list update:', agentList);
+                setAgents(agentList);
+            };
+
+            // Listen for individual agent updates
+            const handleAgentUpdate = (updatedAgent) => {
+                console.log('Received agent update:', updatedAgent);
+                setAgents(prev =>
+                    prev.map(a => a._id === updatedAgent._id ? updatedAgent : a)
+                );
+            };
+
+            socket.on('agent:list:updated', handleAgentListUpdate);
+            socket.on('agent:updated', handleAgentUpdate);
+
+            // Cleanup listeners on unmount
+            return () => {
+                socket.off('agent:list:updated', handleAgentListUpdate);
+                socket.off('agent:updated', handleAgentUpdate);
+            };
+        }
+    }, [socket]);
 
     return (
         <div>
