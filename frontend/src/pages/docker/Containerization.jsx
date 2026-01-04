@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { API_BASE_URL } from '../../config';
 
 const Containerization = () => {
     const [file, setFile] = useState(null);
@@ -16,7 +17,7 @@ const Containerization = () => {
     const fetchAgents = async () => {
         try {
             const token = localStorage.getItem('token');
-            const res = await axios.get('http://localhost:3000/api/agents', {
+            const res = await axios.get(`${API_BASE_URL}/api/agents`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             // Only show online agents
@@ -52,7 +53,7 @@ const Containerization = () => {
 
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.post('http://localhost:3000/api/deploy/compose', {
+            const response = await axios.post(`${API_BASE_URL}/api/deploy/compose`, {
                 composeContent: fileContent,
                 targetAgentIds: selectedAgents
             }, {

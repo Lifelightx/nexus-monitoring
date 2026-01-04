@@ -3,6 +3,7 @@ import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import axios from 'axios';
 import { useSocket } from '../../context/SocketContext';
 import Notification from '../../components/Notification';
+import { API_BASE_URL } from '../../config';
 
 const DockerImageDetails = ({ dockerData: propDockerData, agentName: propAgentName, serverId: propServerId }) => {
     const navigate = useNavigate();
@@ -101,7 +102,7 @@ const DockerImageDetails = ({ dockerData: propDockerData, agentName: propAgentNa
         try {
             const token = localStorage.getItem('token');
             await axios.post(
-                `http://localhost:3000/api/agents/${serverId}/docker/control`,
+                `${API_BASE_URL}/api/agents/${serverId}/docker/control`,
                 { action, containerId, payload },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
@@ -131,7 +132,7 @@ const DockerImageDetails = ({ dockerData: propDockerData, agentName: propAgentNa
                 return;
             }
 
-            const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+            const apiUrl = API_BASE_URL;
             await axios.post(
                 `${apiUrl}/api/agents/${serverId}/docker/control`,
                 { action, containerId: 'image-action', payload: { imageId } }, // Sending dummy containerId

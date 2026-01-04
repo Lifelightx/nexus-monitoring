@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
+import { API_BASE_URL } from '../config';
 
 const SocketContext = createContext();
 
@@ -12,7 +13,7 @@ export const SocketProvider = ({ children }) => {
 
     useEffect(() => {
         // Initialize socket connection
-        const newSocket = io('http://localhost:3000', {
+        const newSocket = io(API_BASE_URL, {
             transports: ['websocket'], // Force websocket to avoid polling issues
             reconnection: true,
             reconnectionAttempts: 5,

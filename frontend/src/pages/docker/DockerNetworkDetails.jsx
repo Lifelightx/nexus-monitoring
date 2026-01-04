@@ -3,6 +3,7 @@ import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import axios from 'axios';
 import { useSocket } from '../../context/SocketContext';
 import Notification from '../../components/Notification';
+import { API_BASE_URL } from '../../config';
 
 const DockerNetworkDetails = ({ dockerData: propDockerData, agentName: propAgentName, serverId: propServerId }) => {
     const navigate = useNavigate();
@@ -48,7 +49,7 @@ const DockerNetworkDetails = ({ dockerData: propDockerData, agentName: propAgent
 
         try {
             const token = localStorage.getItem('token');
-            const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+            const apiUrl = API_BASE_URL;
             const response = await axios.post(
                 `${apiUrl}/api/agents/${serverId}/docker/control`,
                 { action, containerId, payload },

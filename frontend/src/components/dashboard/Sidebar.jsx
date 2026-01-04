@@ -64,8 +64,8 @@ const Sidebar = () => {
                         <div key={item.name}>
                             <Link
                                 to={item.subItems ? item.subItems[0].path : item.path}
-                                className={`flex items-center gap-3 px-4 py-3 rounded-md transition-all duration-300 group ${(item.subItems ? location.pathname.startsWith(item.path) : location.pathname === item.path)
-                                    ? 'bg-white/5 text-white shadow-sm shadow-accent/20'
+                                className={`flex items-center gap-3 px-3 py-2 rounded-md transition-all duration-300 group ${(item.subItems ? location.pathname.startsWith(item.path) : location.pathname === item.path)
+                                    ? 'bg-sky-500/10 text-sky-400 shadow-sm shadow-sky-500/20'
                                     : 'text-text-secondary hover:bg-white/5 hover:text-white'
                                     }`}
                             >
@@ -81,7 +81,7 @@ const Sidebar = () => {
                                             key={sub.name}
                                             to={sub.path}
                                             className={`block px-3 py-2 rounded-lg text-sm transition-colors ${location.pathname === sub.path
-                                                ? 'text-white bg-white/10'
+                                                ? 'text-sky-400 bg-sky-500/10'
                                                 : 'text-text-secondary hover:text-white hover:bg-white/5'
                                                 }`}
                                         >
@@ -95,15 +95,7 @@ const Sidebar = () => {
                 </div>
             </div>
 
-            <div className="mt-auto px-6 pb-8">
-                <div className="bg-gradient-to-br from-accent/20 to-purple-500/20 p-4 rounded-xl border border-white/10">
-                    <h4 className="font-bold text-white mb-1">Pro Plan</h4>
-                    <p className="text-xs text-text-secondary mb-3">Get access to advanced features</p>
-                    <button className="w-full bg-white/10 hover:bg-white/20 text-white text-xs font-bold py-2 rounded-lg transition-colors">
-                        Upgrade Now
-                    </button>
-                </div>
-            </div>
+
         </div>
     );
 };

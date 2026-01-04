@@ -1,5 +1,6 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import axios from 'axios';
+import { API_BASE_URL } from '../config';
 
 const AuthContext = createContext(null);
 
@@ -21,7 +22,7 @@ export const AuthProvider = ({ children }) => {
 
     const login = async (email, password) => {
         try {
-            const { data } = await axios.post('http://localhost:3000/api/auth/login', { email, password });
+            const { data } = await axios.post(`${API_BASE_URL}/api/auth/login`, { email, password });
             localStorage.setItem('token', data.token);
             localStorage.setItem('user', JSON.stringify(data));
             axios.defaults.headers.common['Authorization'] = `Bearer ${data.token}`;
@@ -37,7 +38,7 @@ export const AuthProvider = ({ children }) => {
 
     const register = async (username, email, password) => {
         try {
-            const { data } = await axios.post('http://localhost:3000/api/auth/register', { username, email, password });
+            const { data } = await axios.post(`${API_BASE_URL}/api/auth/register`, { username, email, password });
             localStorage.setItem('token', data.token);
             localStorage.setItem('user', JSON.stringify(data));
             axios.defaults.headers.common['Authorization'] = `Bearer ${data.token}`;

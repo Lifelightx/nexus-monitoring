@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { useSocket } from '../../context/SocketContext';
+import { API_BASE_URL } from '../../config';
 
 const ServerMetrics = () => {
     const { agent } = useOutletContext();
@@ -44,7 +45,7 @@ const ServerMetrics = () => {
     }
 
     const downloadReport = () => {
-        window.open(`http://localhost:3000/api/metrics/${agent._id}/report?days=7`, '_blank');
+        window.open(`${API_BASE_URL}/api/metrics/${agent._id}/report?days=7`, '_blank');
     };
 
     return (

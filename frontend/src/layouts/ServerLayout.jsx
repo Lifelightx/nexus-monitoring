@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Outlet, NavLink, useParams, useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useSocket } from '../context/SocketContext';
+import { API_BASE_URL } from '../config';
 
 const ServerLayout = () => {
     const { id } = useParams();
@@ -17,7 +18,7 @@ const ServerLayout = () => {
             const fetchAgent = async () => {
                 try {
                     const token = localStorage.getItem('token');
-                    const res = await axios.get(`http://localhost:3000/api/agents/${id}`, {
+                    const res = await axios.get(`${API_BASE_URL}/api/agents/${id}`, {
                         headers: { Authorization: `Bearer ${token}` }
                     });
                     setAgent(res.data);

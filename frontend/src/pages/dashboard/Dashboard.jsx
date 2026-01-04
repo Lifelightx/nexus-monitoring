@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import axios from 'axios';
+import { API_BASE_URL } from '../../config';
 import InstallationGuide from '../../components/dashboard/InstallationGuide';
 import AddServerModal from '../../components/dashboard/AddServerModal';
 
@@ -17,7 +18,7 @@ const Dashboard = () => {
     const fetchAgents = async () => {
         try {
             const token = localStorage.getItem('token');
-            const res = await axios.get('http://localhost:3000/api/agents', {
+            const res = await axios.get(`${API_BASE_URL}/api/agents`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             const agentsData = res.data;

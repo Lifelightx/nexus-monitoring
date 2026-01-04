@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import { useSocket } from '../../context/SocketContext';
 import Notification from '../../components/Notification';
+import { API_BASE_URL } from '../../config';
 
 const DockerDetails = ({ dockerData, agentName, serverId: propServerId, initialTab = 'containers' }) => {
     const navigate = useNavigate();
@@ -122,7 +123,7 @@ const DockerDetails = ({ dockerData, agentName, serverId: propServerId, initialT
         try {
             const token = localStorage.getItem('token');
             const response = await axios.post(
-                `http://localhost:3000/api/agents/${serverId}/docker/control`,
+                `${API_BASE_URL}/api/agents/${serverId}/docker/control`,
                 { action, containerId, payload },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
@@ -328,7 +329,7 @@ const DockerDetails = ({ dockerData, agentName, serverId: propServerId, initialT
                                     <label className="block text-sm font-medium text-text-secondary mb-1">Environment Variables</label>
                                     <textarea
                                         rows="2"
-                                        placeholder="e.g., NODE_ENV=production, DB_HOST=localhost"
+                                        placeholder="e.g., NODE_ENV=production, DB_HOST=192.168.1.100"
                                         className="w-full bg-white/5 border border-white/10 rounded-lg p-2.5 text-white focus:border-accent focus:outline-none transition-colors resize-none"
                                         value={createForm.env}
                                         onChange={e => setCreateForm({ ...createForm, env: e.target.value })}

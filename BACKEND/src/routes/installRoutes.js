@@ -79,7 +79,8 @@ router.get(/^\/files\/(.*)/, (req, res) => {
         'package.json',
         'collectors/systemCollector.js',
         'collectors/dockerCollector.js',
-        'collectors/agentCollector.js'
+        'collectors/agentCollector.js',
+        'handlers/dockerHandler.js'
     ];
 
     // Basic security check to prevent directory traversal

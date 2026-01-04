@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { API_BASE_URL } from '../../config';
 
 const AddServerModal = ({ onClose }) => {
     const [command, setCommand] = useState('Loading...');
@@ -9,9 +10,9 @@ const AddServerModal = ({ onClose }) => {
     useEffect(() => {
         const fetchToken = async () => {
             try {
-                const res = await axios.get('http://localhost:3000/api/install/token');
+                const res = await axios.get(`${API_BASE_URL}/api/install/token`);
                 const token = res.data.token;
-                const serverUrl = 'http://localhost:3000'; // In prod, use window.location.origin or config
+                const serverUrl = API_BASE_URL; // In prod, use window.location.origin or config
                 // The command: curl -sL <url>/script | sudo bash -s -- <url> <token>
                 const cmd = `curl -sL ${serverUrl}/api/install/script | sudo bash -s -- ${serverUrl} ${token}`;
                 setCommand(cmd);

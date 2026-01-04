@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { API_BASE_URL } from '../../config';
 
 const FileExplorer = () => {
     const { id } = useParams();
@@ -28,7 +29,7 @@ const FileExplorer = () => {
         const agentIdentifier = id;
         const token = localStorage.getItem('token');
 
-        fetch(`http://localhost:3000/api/agents/${agentIdentifier}/system/files?path=${encodeURIComponent(path)}`, {
+        fetch(`${API_BASE_URL}/api/agents/${agentIdentifier}/system/files?path=${encodeURIComponent(path)}`, {
             headers: {
                 'Authorization': `Bearer ${token}`
             }
