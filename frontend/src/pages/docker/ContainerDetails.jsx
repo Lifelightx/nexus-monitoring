@@ -1,17 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
-import ContainerTerminal from './ContainerTerminal';
 import ContainerLogs from './ContainerLogs';
 
 const ContainerDetails = ({ serverId: propServerId, containerName: propContainerName, containerId: propContainerId, agentName: propAgentName }) => {
     const { serverId: paramServerId, containerName: paramContainerName } = useParams();
     const location = useLocation();
     const navigate = useNavigate();
-    const [activeTab, setActiveTab] = useState('logs');
 
     const serverId = propServerId || paramServerId;
     const containerName = propContainerName || paramContainerName || location.state?.containerName;
-    // Fallback to location state or try to find it if possible (though ID is needed for logs/terminal)
     const containerId = propContainerId || location.state?.containerId;
     const agentId = serverId;
 
@@ -32,36 +29,15 @@ const ContainerDetails = ({ serverId: propServerId, containerName: propContainer
                     <p className="text-text-secondary font-mono text-sm mt-1">{containerId}</p>
                 </div>
 
-                {/* Tabs */}
-                <div className="flex gap-4 border-b border-white/10 mb-4">
-                    <button
-                        onClick={() => setActiveTab('logs')}
-                        className={`px-4 py-2 border-b-2 transition-colors ${activeTab === 'logs'
-                            ? 'border-accent text-accent'
-                            : 'border-transparent text-text-secondary hover:text-white'
-                            }`}
-                    >
-                        <i className="fas fa-file-alt mr-2"></i> Logs
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('terminal')}
-                        className={`px-4 py-2 border-b-2 transition-colors ${activeTab === 'terminal'
-                            ? 'border-accent text-accent'
-                            : 'border-transparent text-text-secondary hover:text-white'
-                            }`}
-                    >
-                        <i className="fas fa-terminal mr-2"></i> Terminal
-                    </button>
-                </div>
-
-                {/* Content Area */}
+                {/* Logs Section */}
                 <div className="flex-1 bg-[#1e1e1e] rounded-xl border border-white/10 overflow-hidden shadow-2xl min-h-[500px] flex flex-col">
-                    {activeTab === 'logs' && (
-                        <ContainerLogs containerId={containerId} agentId={agentId} />
-                    )}
-                    {activeTab === 'terminal' && (
-                        <ContainerTerminal containerId={containerId} agentId={agentId} />
-                    )}
+                    <div className="bg-[#2d2d2d] px-4 py-3 flex items-center justify-between border-b border-white/5">
+                        <div className="flex items-center gap-2">
+                            <i className="fas fa-file-alt text-accent"></i>
+                            <span className="font-semibold">Container Logs</span>
+                        </div>
+                    </div>
+                    <ContainerLogs containerId={containerId} agentId={agentId} />
                 </div>
             </div>
         </div>

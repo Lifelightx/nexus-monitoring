@@ -19,6 +19,8 @@
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^9.0.0",
+    "node-cron": "^3.0.3",
+    "nodemailer": "^7.0.12",
     "nodemon": "^3.1.11",
     "pdfkit": "^0.17.2",
     "pdfkit-table": "^0.1.99",

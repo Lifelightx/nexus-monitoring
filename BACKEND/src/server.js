@@ -11,31 +11,38 @@ const agentRoutes = require('./routes/agentRoutes');
 const dockerRoutes = require('./routes/dockerRoutes');
 const socketHandler = require('./socket');
 const logger = require('./utils/logger');
+const { scheduleAlertCleanup } = require('./services/schedulerService');
 
 const seedAdminUser = require('./utils/seeder');
 
 dotenv.config();
 connectDB().then(() => {
     seedAdminUser();
+    // Initialize alert auto-cleanup scheduler
+    scheduleAlertCleanup();
 });
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
     cors: {
-        origin: ["http://localhost:5173", "http://192.168.56.1:5173", "http://10.163.41.142:5173"],
+        origin: ["http://localhost:5173", "http://192.168.56.1:5173", "http://10.163.41.142:5173", "http://192.168.13.73:5173"],
         methods: ["GET", "POST"]
     }
 });
 
 const port = process.env.PORT || 3000;
+const host = process.env.SERVER_HOST || 'localhost';
 
 // Store socket.io instance and agent socket mappings in app
 app.set('io', io);
 app.set('agentSockets', new Map());
 
 // Middleware
-app.use(cors());
+app.use(cors({
+    origin: ["http://localhost:5173", "http://192.168.56.1:5173", "http://10.163.41.142:5173", "http://192.168.13.73:5173"],
+    credentials: true
+}));
 app.use(express.json());
 
 // Documentation
@@ -49,6 +56,9 @@ app.use('/api/install', require('./routes/installRoutes'));
 app.use('/api/agents', require('./routes/systemRoutes'));
 app.use('/api/metrics', require('./routes/metricRoutes'));
 app.use('/api/deploy', require('./routes/deployRoutes'));
+// IMPORTANT: Register settings routes BEFORE alert routes to prevent path conflicts
+app.use('/api/alerts/settings', require('./routes/alertSettingsRoutes'));
+app.use('/api/alerts', require('./routes/alertRoutes'));
 
 app.get('/', (req, res) => {
     res.json({ message: 'Nexus Monitor API is running', docs: '/api-docs' });
@@ -58,6 +68,6 @@ app.get('/', (req, res) => {
 socketHandler(io, app);
 
 server.listen(port, () => {
-    logger.info(`Server running at http://localhost:${port}`);
-    logger.info(`Documentation available at http://localhost:${port}/api-docs`);
+    logger.info(`Server running at http://${host}:${port}`);
+    logger.info(`Documentation available at http://${host}:${port}/api-docs`);
 });

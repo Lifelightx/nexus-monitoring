@@ -19,6 +19,15 @@ const DockerImageDetails = ({ dockerData: propDockerData, agentName: propAgentNa
     const [loadingAction, setLoadingAction] = useState(null); // {containerId, action} or {imageId, action}
     const [notification, setNotification] = useState(null);
     const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
+    const [showCreateModal, setShowCreateModal] = useState(false);
+    const [createForm, setCreateForm] = useState({
+        image: '',
+        name: '',
+        ports: '', // "8080:80, 3000:3000"
+        env: '', // "KEY=VALUE, KEY2=VALUE2"
+        restart: 'no', // no, always, on-failure, unless-stopped
+        command: ''
+    });
 
     const socket = useSocket();
 
@@ -67,7 +76,7 @@ const DockerImageDetails = ({ dockerData: propDockerData, agentName: propAgentNa
             }
 
             // Handle Single Actions
-            if (data.containerId === loadingAction.containerId || (data.action === 'removeImage')) {
+            if (loadingAction && (data.containerId === loadingAction.containerId || (data.action === 'removeImage') || (data.action === 'create'))) {
                 setLoadingAction(null);
                 if (data.success) {
                     setNotification({ type: 'success', message: data.message });
@@ -78,6 +87,17 @@ const DockerImageDetails = ({ dockerData: propDockerData, agentName: propAgentNa
                                 state: { dockerData: localDockerData, agentName: localAgentName }
                             });
                         }, 1500);
+                    } else if (data.action === 'create') {
+                        // Close modal and reset form on successful container creation
+                        setShowCreateModal(false);
+                        setCreateForm({
+                            image: '',
+                            name: '',
+                            ports: '',
+                            env: '',
+                            restart: 'no',
+                            command: ''
+                        });
                     }
                 } else {
                     setNotification({ type: 'error', message: data.message || 'Operation failed' });
@@ -239,6 +259,17 @@ const DockerImageDetails = ({ dockerData: propDockerData, agentName: propAgentNa
                             ) : null}
 
                             <button
+                                onClick={() => {
+                                    setCreateForm({ ...createForm, image: imageName });
+                                    setShowCreateModal(true);
+                                }}
+                                className="px-4 py-2 rounded-lg bg-green-500/20 text-green-400 hover:bg-green-500 hover:text-white transition-all border border-green-500/20 flex items-center gap-2"
+                            >
+                                <i className="fas fa-plus"></i>
+                                Create Container
+                            </button>
+
+                            <button
                                 onClick={() => handleImageControl('removeImage')}
                                 disabled={imageContainers.length > 0 || loadingAction?.action === 'removeImage'}
                                 className={`px-4 py-2 rounded-lg transition-all shadow-lg flex items-center gap-2 ${imageContainers.length > 0
@@ -384,6 +415,129 @@ const DockerImageDetails = ({ dockerData: propDockerData, agentName: propAgentNa
                 </div>
             </div>
 
+
+            {/* Create Container Modal */}
+            {showCreateModal && (
+                <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4" onClick={() => setShowCreateModal(false)}>
+                    <div className="glass max-w-2xl w-full max-h-[85vh] overflow-y-auto rounded-xl p-6 relative" onClick={(e) => e.stopPropagation()}>
+                        {loadingAction?.action === 'create' && (
+                            <div className="absolute inset-0 bg-bg-dark/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center rounded-xl">
+                                <div className="w-12 h-12 border-4 border-accent border-t-transparent rounded-full animate-spin mb-4"></div>
+                                <p className="text-white font-medium">Creating Container...</p>
+                                <p className="text-text-secondary text-sm mt-2">This may take a moment</p>
+                            </div>
+                        )}
+
+                        <div className="flex items-center justify-between mb-6">
+                            <h2 className="text-2xl font-bold flex items-center gap-2">
+                                <i className="fas fa-plus-circle text-green-400"></i>
+                                Create Container from {imageName}
+                            </h2>
+                            <button
+                                onClick={() => setShowCreateModal(false)}
+                                className="text-text-secondary hover:text-white transition-colors"
+                            >
+                                <i className="fas fa-times text-2xl"></i>
+                            </button>
+                        </div>
+
+                        <form onSubmit={(e) => {
+                            e.preventDefault();
+                            handleDockerControl('new', 'create', createForm);
+                        }} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-text-secondary mb-1">Image Name <span className="text-red-400">*</span></label>
+                                <input
+                                    type="text"
+                                    required
+                                    readOnly
+                                    className="w-full bg-white/5 border border-white/10 rounded-lg p-2.5 text-white focus:border-accent focus:outline-none transition-colors cursor-not-allowed opacity-75"
+                                    value={createForm.image}
+                                />
+                                <p className="text-xs text-text-secondary mt-1">Image is pre-selected and cannot be changed</p>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-text-secondary mb-1">Container Name</label>
+                                    <input
+                                        type="text"
+                                        placeholder="e.g., my-web-server"
+                                        className="w-full bg-white/5 border border-white/10 rounded-lg p-2.5 text-white focus:border-accent focus:outline-none transition-colors"
+                                        value={createForm.name}
+                                        onChange={e => setCreateForm({ ...createForm, name: e.target.value })}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-text-secondary mb-1">Restart Policy</label>
+                                    <select
+                                        className="w-full bg-white/5 border border-white/10 rounded-lg p-2.5 text-white focus:border-accent focus:outline-none transition-colors"
+                                        value={createForm.restart}
+                                        onChange={e => setCreateForm({ ...createForm, restart: e.target.value })}
+                                    >
+                                        <option value="no">No</option>
+                                        <option value="always">Always</option>
+                                        <option value="on-failure">On Failure</option>
+                                        <option value="unless-stopped">Unless Stopped</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-text-secondary mb-1">Port Mapping (Host:Container)</label>
+                                <input
+                                    type="text"
+                                    placeholder="e.g., 8080:80, 3000:3000"
+                                    className="w-full bg-white/5 border border-white/10 rounded-lg p-2.5 text-white focus:border-accent focus:outline-none transition-colors"
+                                    value={createForm.ports}
+                                    onChange={e => setCreateForm({ ...createForm, ports: e.target.value })}
+                                />
+                                <p className="text-xs text-text-secondary mt-1">Comma separated list of port mappings</p>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-text-secondary mb-1">Environment Variables</label>
+                                <textarea
+                                    rows="2"
+                                    placeholder="e.g., NODE_ENV=production, DB_HOST=192.168.1.100"
+                                    className="w-full bg-white/5 border border-white/10 rounded-lg p-2.5 text-white focus:border-accent focus:outline-none transition-colors resize-none"
+                                    value={createForm.env}
+                                    onChange={e => setCreateForm({ ...createForm, env: e.target.value })}
+                                ></textarea>
+                                <p className="text-xs text-text-secondary mt-1">Comma separated list of KEY=VALUE pairs</p>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-text-secondary mb-1">Command (Optional)</label>
+                                <input
+                                    type="text"
+                                    placeholder="e.g., npm start"
+                                    className="w-full bg-white/5 border border-white/10 rounded-lg p-2.5 text-white focus:border-accent focus:outline-none transition-colors"
+                                    value={createForm.command}
+                                    onChange={e => setCreateForm({ ...createForm, command: e.target.value })}
+                                />
+                            </div>
+
+                            <div className="flex justify-end gap-3 mt-6">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowCreateModal(false)}
+                                    className="px-4 py-2 rounded-lg text-text-secondary hover:text-white hover:bg-white/5 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={loadingAction?.action === 'create'}
+                                    className="px-6 py-2 rounded-lg bg-green-500 hover:bg-green-600 text-white font-medium transition-colors shadow-lg shadow-green-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {loadingAction?.action === 'create' ? 'Creating...' : 'Create Container'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
 
             {/* Delete All Confirmation Modal */}
             {

@@ -11,6 +11,41 @@ const logStreams = new Map(); // containerId -> process
 const terminalSessions = new Map(); // containerId -> process (pty or spawn)
 
 /**
+ * Detect available shell in container
+ * @param {string} containerId - Docker container ID
+ * @returns {Promise<string>} - Path to available shell
+ */
+async function detectShell(containerId) {
+    const { exec } = require('child_process');
+    const util = require('util');
+    const execPromise = util.promisify(exec);
+
+    // Try shells in order of preference
+    const shells = ['sh', 'bash', 'ash'];
+
+    for (const shell of shells) {
+        try {
+            // Try to execute the shell with --version or -c 'echo test'
+            const { stdout } = await execPromise(
+                `docker exec ${containerId} ${shell} -c "echo ok"`,
+                { timeout: 2000 }
+            );
+            if (stdout.trim() === 'ok') {
+                console.log(`Detected shell for ${containerId}: ${shell}`);
+                return shell;
+            }
+        } catch (e) {
+            // Shell not found or failed, try next
+            continue;
+        }
+    }
+
+    // Fallback to sh (most universal)
+    console.warn(`No shell detected for ${containerId}, using sh as fallback`);
+    return 'sh';
+}
+
+/**
  * Start streaming logs for a container
  * @param {Object} socket - Socket.io socket
  * @param {string} containerId - Docker container ID
@@ -63,71 +98,95 @@ function stopLogs(containerId) {
  * @param {Object} socket - Socket.io socket
  * @param {string} containerId - Docker container ID
  */
-function startTerminal(socket, containerId) {
+async function startTerminal(socket, containerId) {
     if (terminalSessions.has(containerId)) {
         stopTerminal(containerId);
     }
 
     console.log(`Starting terminal for ${containerId}`);
 
-    if (pty) {
-        // Use node-pty for full terminal experience
-        try {
-            const ptyProcess = pty.spawn('docker', ['exec', '-it', containerId, '/bin/sh'], {
-                name: 'xterm-color',
-                cols: 80,
-                rows: 30,
-                cwd: process.env.HOME,
-                env: process.env
-            });
+    try {
+        // Detect available shell
+        const shell = await detectShell(containerId);
 
-            terminalSessions.set(containerId, { process: ptyProcess, type: 'pty' });
+        if (pty) {
+            // Use node-pty for full terminal experience
+            try {
+                const ptyProcess = pty.spawn('docker', ['exec', '-it', containerId, shell], {
+                    name: 'xterm-color',
+                    cols: 80,
+                    rows: 30,
+                    cwd: process.env.HOME,
+                    env: process.env
+                });
 
-            ptyProcess.onData((data) => {
-                socket.emit('docker:terminal:data', { containerId, data });
-            });
+                terminalSessions.set(containerId, { process: ptyProcess, type: 'pty' });
 
-            ptyProcess.onExit(({ exitCode }) => {
-                console.log(`Terminal (PTY) for ${containerId} exited with code ${exitCode}`);
-                terminalSessions.delete(containerId);
-                socket.emit('docker:terminal:exit', { containerId, exitCode });
-            });
+                ptyProcess.onData((data) => {
+                    socket.emit('docker:terminal:data', { containerId, data });
+                });
 
-        } catch (error) {
-            console.error(`Failed to start PTY terminal for ${containerId}:`, error);
-            socket.emit('docker:terminal:error', { containerId, error: error.message });
+                ptyProcess.onExit(({ exitCode }) => {
+                    console.log(`Terminal (PTY) for ${containerId} exited with code ${exitCode}`);
+                    terminalSessions.delete(containerId);
+                    socket.emit('docker:terminal:exit', { containerId, exitCode });
+                });
+
+                console.log(`Started PTY terminal for ${containerId} with ${shell}`);
+
+            } catch (error) {
+                console.error(`Failed to start PTY terminal for ${containerId}:`, error);
+                socket.emit('docker:terminal:error', {
+                    containerId,
+                    error: `Failed to start terminal: ${error.message}`
+                });
+            }
+        } else {
+            // Fallback to child_process (without node-pty)
+            try {
+                // Use -i only (no -t) to avoid TTY issues without node-pty
+                const cmd = spawn('docker', ['exec', '-i', containerId, shell]);
+
+                terminalSessions.set(containerId, { process: cmd, type: 'spawn' });
+
+                cmd.stdout.on('data', (data) => {
+                    socket.emit('docker:terminal:data', { containerId, data: data.toString() });
+                });
+
+                cmd.stderr.on('data', (data) => {
+                    socket.emit('docker:terminal:data', { containerId, data: data.toString() });
+                });
+
+                cmd.on('close', (code) => {
+                    console.log(`Terminal (spawn) for ${containerId} exited with code ${code}`);
+                    terminalSessions.delete(containerId);
+                    socket.emit('docker:terminal:exit', { containerId, exitCode: code });
+                });
+
+                cmd.on('error', (err) => {
+                    console.error(`Failed to start spawn terminal for ${containerId}:`, err);
+                    socket.emit('docker:terminal:error', {
+                        containerId,
+                        error: `Terminal error: ${err.message}`
+                    });
+                });
+
+                console.log(`Started spawn terminal for ${containerId} with ${shell} (basic mode)`);
+
+            } catch (error) {
+                console.error(`Failed to start fallback terminal for ${containerId}:`, error);
+                socket.emit('docker:terminal:error', {
+                    containerId,
+                    error: `Failed to start terminal: ${error.message}`
+                });
+            }
         }
-    } else {
-        // Fallback to child_process
-        try {
-            // Use -i for interactive, but no -t because we don't have a TTY
-            const cmd = spawn('docker', ['exec', '-i', containerId, '/bin/sh']);
-
-            terminalSessions.set(containerId, { process: cmd, type: 'spawn' });
-
-            cmd.stdout.on('data', (data) => {
-                socket.emit('docker:terminal:data', { containerId, data: data.toString() });
-            });
-
-            cmd.stderr.on('data', (data) => {
-                socket.emit('docker:terminal:data', { containerId, data: data.toString() });
-            });
-
-            cmd.on('close', (code) => {
-                console.log(`Terminal (spawn) for ${containerId} exited with code ${code}`);
-                terminalSessions.delete(containerId);
-                socket.emit('docker:terminal:exit', { containerId, exitCode: code });
-            });
-
-            cmd.on('error', (err) => {
-                console.error(`Failed to start spawn terminal for ${containerId}:`, err);
-                socket.emit('docker:terminal:error', { containerId, error: err.message });
-            });
-
-        } catch (error) {
-            console.error(`Failed to start fallback terminal for ${containerId}:`, error);
-            socket.emit('docker:terminal:error', { containerId, error: error.message });
-        }
+    } catch (error) {
+        console.error(`Failed to detect shell for ${containerId}:`, error);
+        socket.emit('docker:terminal:error', {
+            containerId,
+            error: `Container may not have a shell available: ${error.message}`
+        });
     }
 }
 

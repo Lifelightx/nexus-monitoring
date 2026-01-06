@@ -15,7 +15,26 @@ exports.getAgents = async (req, res) => {
                 agent.status = 'offline';
                 await agent.save();
             }
-            return agent;
+
+            // Fetch the latest metric for this agent to get Docker details
+            const latestMetric = await Metric.findOne({ agent: agent._id })
+                .sort({ timestamp: -1 })
+                .select('dockerDetails docker')
+                .lean();
+
+            // Attach Docker info to agent object
+            const agentObj = agent.toObject();
+            agentObj.latestDockerInfo = latestMetric ? {
+                containers: latestMetric.dockerDetails?.containers || [],
+                images: latestMetric.dockerDetails?.images || [],
+                volumes: latestMetric.dockerDetails?.volumes || []
+            } : {
+                containers: [],
+                images: [],
+                volumes: []
+            };
+
+            return agentObj;
         }));
 
         res.json(agents);

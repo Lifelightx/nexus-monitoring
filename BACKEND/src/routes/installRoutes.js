@@ -93,22 +93,16 @@ router.get('/script/windows', (req, res) => {
  */
 router.get(/^\/files\/(.*)/, (req, res) => {
     const filename = req.params[0];
-    const allowedFiles = [
-        'index.js',
-        'package.json',
-        'collectors/systemCollector.js',
-        'collectors/dockerCollector.js',
-        'collectors/agentCollector.js',
-        'handlers/dockerHandler.js'
-    ];
+    const binaries = ['agent-linux', 'agent-win.exe'];
 
-    // Basic security check to prevent directory traversal
-    if (!allowedFiles.includes(filename) && !allowedFiles.some(f => filename.endsWith(f))) {
-        return res.status(403).send('Forbidden');
+    // Serve binaries from dist folder
+    if (binaries.includes(filename)) {
+        const distDir = path.join(__dirname, '../../../agent/dist');
+        return res.sendFile(path.join(distDir, filename));
     }
 
-    const agentDir = path.join(__dirname, '../../../agent');
-    res.sendFile(path.join(agentDir, filename));
+    // Only binaries are allowed
+    return res.status(403).send('Forbidden');
 });
 
 module.exports = router;

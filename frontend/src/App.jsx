@@ -24,7 +24,7 @@ import Containerization from './pages/docker/Containerization';
 import MainLayout from './layouts/MainLayout';
 import ServerLayout from './layouts/ServerLayout';
 import Metrics from './pages/dashboard/Metrics';
-import Alerts from './pages/dashboard/Alerts';
+import AlertsPage from './pages/alerts/AlertsPage';
 import Settings from './pages/dashboard/Settings';
 import Servers from './pages/server/Servers';
 
@@ -114,7 +114,7 @@ function App() {
                   <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/servers" element={<Servers />} />
                   <Route path="/metrics" element={<Metrics />} />
-                  <Route path="/alerts" element={<Alerts />} />
+                  <Route path="/alerts" element={<AlertsPage />} />
                   <Route path="/settings" element={<Settings />} />
 
                   {/* Server Routes wrapped in ServerLayout */}

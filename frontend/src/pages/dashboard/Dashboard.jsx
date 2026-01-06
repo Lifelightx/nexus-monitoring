@@ -5,6 +5,7 @@ import { API_BASE_URL } from '../../config';
 import { useSocket } from '../../context/SocketContext';
 import InstallationGuide from '../../components/dashboard/InstallationGuide';
 import AddServerModal from '../../components/dashboard/AddServerModal';
+import RecentAlerts from '../../components/dashboard/RecentAlerts';
 
 const Dashboard = () => {
     const { showGuide, setShowGuide } = useOutletContext();
@@ -41,15 +42,15 @@ const Dashboard = () => {
         agentsData.forEach(agent => {
             if (agent.status === 'online') {
                 onlineServers++;
-                // Assuming agent.dockerDetails contains container info if available
-                // Note: The /api/agents endpoint might not return full docker details for all agents list
-                // We might need to rely on what's available or fetch details.
-                // For now, let's assume basic stats are available or we use what we have.
-                // If the list endpoint doesn't return docker stats, we might need to adjust the backend or fetch individually.
-                // Checking previous agent data structure... usually it has basic info.
 
-                // If docker info is not in the list response, we'll display 0 or placeholders.
-                // Let's assume for this step we display what we can.
+                // Extract Docker container information from latestDockerInfo
+                if (agent.latestDockerInfo && agent.latestDockerInfo.containers) {
+                    const containers = agent.latestDockerInfo.containers;
+                    totalContainers += containers.length;
+
+                    // Count running containers (state === 'running')
+                    runningContainers += containers.filter(c => c.state === 'running').length;
+                }
             }
         });
 
@@ -184,13 +185,7 @@ const Dashboard = () => {
                     </div>
                 </div>
 
-                <div className="glass p-6 rounded-xl">
-                    <h3 className="text-xl font-bold text-white mb-4">Recent Alerts</h3>
-                    <div className="flex flex-col items-center justify-center h-40 text-text-secondary">
-                        <i className="fas fa-check-circle text-4xl mb-2 text-green-500/50"></i>
-                        <p>All systems operational</p>
-                    </div>
-                </div>
+                <RecentAlerts />
             </div>
         </div>
     );

@@ -71,49 +71,14 @@ const ContainerTerminal = ({ containerId, agentId }) => {
             resizeObserver.observe(terminalRef.current);
         }
 
-        // Local line buffer for editing
-        let currentLine = '';
-
-        // Handle input with local echo and editing
+        // Handle input - send directly to backend without local echo
+        // The backend/container will handle echoing
         term.onData((data) => {
-            const code = data.charCodeAt(0);
-
-            // Enter key (13)
-            if (code === 13) {
-                term.write('\r\n');
-                socket.emit('docker:terminal:data', {
-                    agentId,
-                    containerId,
-                    data: currentLine + '\n'
-                });
-                currentLine = '';
-            }
-            // Backspace (127)
-            else if (code === 127) {
-                if (currentLine.length > 0) {
-                    currentLine = currentLine.slice(0, -1);
-                    // Move back, print space, move back
-                    term.write('\b \b');
-                }
-            }
-            // Control characters (ignore mostly, except maybe Ctrl+C)
-            else if (code < 32) {
-                // Pass through Ctrl+C (3)
-                if (code === 3) {
-                    socket.emit('docker:terminal:data', {
-                        agentId,
-                        containerId,
-                        data: '\x03'
-                    });
-                    term.write('^C\r\n');
-                    currentLine = '';
-                }
-            }
-            // Normal characters
-            else {
-                currentLine += data;
-                term.write(data);
-            }
+            socket.emit('docker:terminal:data', {
+                agentId,
+                containerId,
+                data: data
+            });
         });
 
         // Listen for output from backend
@@ -123,7 +88,23 @@ const ContainerTerminal = ({ containerId, agentId }) => {
             }
         };
 
+        const handleTerminalError = (data) => {
+            if (data.containerId === containerId) {
+                term.write(`\r\n\x1b[31m✗ Terminal Error: ${data.error}\x1b[0m\r\n`);
+                term.write('\x1b[90mPlease check if the container is running and has a shell available.\x1b[0m\r\n');
+            }
+        };
+
+        const handleTerminalExit = (data) => {
+            if (data.containerId === containerId) {
+                term.write(`\r\n\x1b[33m✓ Terminal session ended (exit code: ${data.exitCode})\x1b[0m\r\n`);
+                term.write('\x1b[90mRefresh the page to start a new session.\x1b[0m\r\n');
+            }
+        };
+
         socket.on('docker:terminal:data', handleTerminalData);
+        socket.on('docker:terminal:error', handleTerminalError);
+        socket.on('docker:terminal:exit', handleTerminalExit);
 
         // Start terminal session
         socket.emit('docker:terminal:start', { agentId, containerId });
@@ -133,6 +114,8 @@ const ContainerTerminal = ({ containerId, agentId }) => {
 
         return () => {
             socket.off('docker:terminal:data', handleTerminalData);
+            socket.off('docker:terminal:error', handleTerminalError);
+            socket.off('docker:terminal:exit', handleTerminalExit);
             socket.emit('docker:terminal:stop', { agentId, containerId });
             term.dispose();
             window.removeEventListener('resize', handleResize);

@@ -129,6 +129,7 @@ module.exports = (io, app) => {
                     uptime: data.uptime,
                     docker: data.docker,
                     dockerDetails: data.dockerDetails,
+                    disk: data.disk,
                     timestamp: new Date()
                 });
 
@@ -137,6 +138,22 @@ module.exports = (io, app) => {
                     lastSeen: new Date(),
                     uptime: data.uptime
                 });
+
+                // Detect alerts
+                const alertService = require('../services/alertService');
+                const previousMetric = await Metric.findOne({ agent: agentInfo._id })
+                    .sort({ timestamp: -1 })
+                    .skip(1)
+                    .lean();
+
+                const alerts = await alertService.detectAlerts(previousMetric, data, agentInfo);
+
+                // Broadcast alerts to dashboard if any
+                if (alerts.length > 0) {
+                    io.to('dashboards').emit('alerts:new', alerts);
+                    // Removed logging to prevent duplicate alert logs
+                }
+
 
             } catch (err) {
                 logger.error('Error saving metrics:', err.message);

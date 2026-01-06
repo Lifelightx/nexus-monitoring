@@ -5,28 +5,53 @@ const Notification = ({ type, message, onClose }) => {
         if (message) {
             const timer = setTimeout(() => {
                 onClose();
-            }, 5000);
+            }, 3000); // Changed to 3 seconds
             return () => clearTimeout(timer);
         }
     }, [message, onClose]);
 
     if (!message) return null;
 
-    const isSuccess = type === 'success';
+    const getStyles = () => {
+        switch (type) {
+            case 'success':
+                return {
+                    border: 'border-green-500',
+                    icon: 'fa-check-circle text-green-500',
+                    title: 'Success'
+                };
+            case 'error':
+                return {
+                    border: 'border-red-500',
+                    icon: 'fa-exclamation-circle text-red-500',
+                    title: 'Error'
+                };
+            case 'warning':
+                return {
+                    border: 'border-yellow-500',
+                    icon: 'fa-exclamation-triangle text-yellow-500',
+                    title: 'Warning'
+                };
+            default:
+                return {
+                    border: 'border-blue-500',
+                    icon: 'fa-info-circle text-blue-500',
+                    title: 'Info'
+                };
+        }
+    };
+
+    const styles = getStyles();
 
     return (
-        <div className={`fixed top-24 right-8 z-50 max-w-sm w-full bg-bg-card backdrop-blur-xl shadow-2xl rounded-r-lg overflow-hidden border-l-4 ${isSuccess ? 'border-green-500' : 'border-red-500'} animate-slide-in`}>
+        <div className={`fixed top-24 right-8 z-50 max-w-sm w-full bg-bg-card backdrop-blur-xl shadow-2xl rounded-r-lg overflow-hidden border-l-4 ${styles.border} animate-slide-in`}>
             <div className="p-4 flex items-start">
                 <div className="flex-shrink-0">
-                    {isSuccess ? (
-                        <i className="fas fa-check-circle text-green-500 text-xl"></i>
-                    ) : (
-                        <i className="fas fa-exclamation-circle text-red-500 text-xl"></i>
-                    )}
+                    <i className={`fas ${styles.icon} text-xl`}></i>
                 </div>
                 <div className="ml-3 w-0 flex-1 pt-0.5">
                     <p className="text-sm font-bold text-text-primary">
-                        {isSuccess ? 'Success' : 'Error'}
+                        {styles.title}
                     </p>
                     <p className="mt-1 text-sm text-text-secondary">
                         {message}

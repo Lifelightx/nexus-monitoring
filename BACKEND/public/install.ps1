@@ -1,4 +1,4 @@
-# Nexus Agent Installation Script for Windows
+# Nexus Agent Installation Script for Windows (Standalone Binary Version)
 # Run this script in PowerShell as Administrator
 
 param(
@@ -12,36 +12,12 @@ param(
     [string]$AgentName = $env:COMPUTERNAME
 )
 
-Write-Host "Installing Nexus Agent..." -ForegroundColor Cyan
+Write-Host "Installing Nexus Agent (Standalone)..." -ForegroundColor Cyan
 Write-Host "Server: $ServerUrl"
 Write-Host "Agent Name: $AgentName"
 
 # ==========================================
-# 1. CHECK FOR NODE.JS
-# ==========================================
-Write-Host "`nChecking for Node.js..." -ForegroundColor Yellow
-
-$nodeVersion = $null
-try {
-    $nodeVersion = node --version 2>$null
-    if ($nodeVersion -match "v(\d+)\.") {
-        $majorVersion = [int]$matches[1]
-        if ($majorVersion -ge 16) {
-            Write-Host "✅ Found Node.js $nodeVersion" -ForegroundColor Green
-        } else {
-            Write-Host "❌ Node.js version $nodeVersion is too old. Please install Node.js v16 or higher." -ForegroundColor Red
-            Write-Host "Download from: https://nodejs.org/" -ForegroundColor Yellow
-            exit 1
-        }
-    }
-} catch {
-    Write-Host "❌ Node.js not found. Please install Node.js v16 or higher." -ForegroundColor Red
-    Write-Host "Download from: https://nodejs.org/" -ForegroundColor Yellow
-    exit 1
-}
-
-# ==========================================
-# 2. CREATE INSTALLATION DIRECTORY
+# 1. CREATE INSTALLATION DIRECTORY
 # ==========================================
 Write-Host "`nSetting up installation directory..." -ForegroundColor Yellow
 
@@ -51,58 +27,28 @@ if (Test-Path $InstallDir) {
 }
 
 New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
-New-Item -ItemType Directory -Path "$InstallDir\agent" -Force | Out-Null
-New-Item -ItemType Directory -Path "$InstallDir\agent\collectors" -Force | Out-Null
-New-Item -ItemType Directory -Path "$InstallDir\agent\handlers" -Force | Out-Null
+New-Item -ItemType Directory -Path "$InstallDir\logs" -Force | Out-Null
 
 # ==========================================
-# 3. DOWNLOAD AGENT FILES
+# 2. DOWNLOAD AGENT BINARY
 # ==========================================
-Write-Host "`nDownloading agent files..." -ForegroundColor Yellow
+Write-Host "`nDownloading agent binary..." -ForegroundColor Yellow
 
-$files = @(
-    "index.js",
-    "package.json",
-    "collectors/systemCollector.js",
-    "collectors/dockerCollector.js",
-    "collectors/agentCollector.js",
-    "handlers/dockerHandler.js"
-)
-
-foreach ($file in $files) {
-    Write-Host "  Downloading $file..." -ForegroundColor Gray
-    $url = "$ServerUrl/api/install/files/$file"
-    $destination = Join-Path "$InstallDir\agent" $file
-    
-    try {
-        Invoke-WebRequest -Uri $url -OutFile $destination -UseBasicParsing
-    } catch {
-        Write-Host "❌ Failed to download $file" -ForegroundColor Red
-        Write-Host "Error: $_" -ForegroundColor Red
-        exit 1
-    }
-}
-
-Write-Host "✅ All files downloaded successfully" -ForegroundColor Green
-
-# ==========================================
-# 4. INSTALL DEPENDENCIES
-# ==========================================
-Write-Host "`nInstalling dependencies..." -ForegroundColor Yellow
-
-Set-Location "$InstallDir\agent"
+$binaryName = "agent-win.exe"
+$url = "$ServerUrl/api/install/files/agent-win.exe"
+$destination = Join-Path $InstallDir $binaryName
 
 try {
-    npm install --production
-    Write-Host "✅ Dependencies installed successfully" -ForegroundColor Green
+    Invoke-WebRequest -Uri $url -OutFile $destination -UseBasicParsing
+    Write-Host "✅ Agent binary downloaded successfully" -ForegroundColor Green
 } catch {
-    Write-Host "❌ Failed to install dependencies" -ForegroundColor Red
+    Write-Host "❌ Failed to download agent binary" -ForegroundColor Red
     Write-Host "Error: $_" -ForegroundColor Red
     exit 1
 }
 
 # ==========================================
-# 5. CREATE CONFIGURATION FILE
+# 3. CREATE CONFIGURATION FILE
 # ==========================================
 Write-Host "`nCreating configuration..." -ForegroundColor Yellow
 
@@ -113,11 +59,11 @@ AGENT_NAME=$AgentName
 INTERVAL=5000
 "@
 
-$envContent | Out-File -FilePath "$InstallDir\agent\.env" -Encoding UTF8
+$envContent | Out-File -FilePath "$InstallDir\.env" -Encoding UTF8
 Write-Host "✅ Configuration created" -ForegroundColor Green
 
 # ==========================================
-# 6. CREATE WINDOWS SERVICE
+# 4. CREATE WINDOWS SERVICE
 # ==========================================
 Write-Host "`nSetting up Windows Service..." -ForegroundColor Yellow
 
@@ -161,26 +107,22 @@ if ($existingService) {
 # Install the service
 Write-Host "  Creating Windows Service..." -ForegroundColor Gray
 
-$nodePath = (Get-Command node).Source
-$appPath = "$InstallDir\agent\index.js"
+$appPath = "$InstallDir\$binaryName"
 
-& $nssmPath install $serviceName $nodePath $appPath
-& $nssmPath set $serviceName AppDirectory "$InstallDir\agent"
+& $nssmPath install $serviceName $appPath
+& $nssmPath set $serviceName AppDirectory "$InstallDir"
 & $nssmPath set $serviceName DisplayName "Nexus Monitor Agent"
 & $nssmPath set $serviceName Description "Nexus monitoring agent for system and Docker metrics"
 & $nssmPath set $serviceName Start SERVICE_AUTO_START
-& $nssmPath set $serviceName AppStdout "$InstallDir\agent\logs\stdout.log"
-& $nssmPath set $serviceName AppStderr "$InstallDir\agent\logs\stderr.log"
+& $nssmPath set $serviceName AppStdout "$InstallDir\logs\stdout.log"
+& $nssmPath set $serviceName AppStderr "$InstallDir\logs\stderr.log"
 & $nssmPath set $serviceName AppRotateFiles 1
 & $nssmPath set $serviceName AppRotateBytes 1048576
-
-# Create logs directory
-New-Item -ItemType Directory -Path "$InstallDir\agent\logs" -Force | Out-Null
 
 Write-Host "✅ Windows Service created" -ForegroundColor Green
 
 # ==========================================
-# 7. START THE SERVICE
+# 5. START THE SERVICE
 # ==========================================
 Write-Host "`nStarting Nexus Agent service..." -ForegroundColor Yellow
 
@@ -201,7 +143,7 @@ try {
 }
 
 # ==========================================
-# 8. FIREWALL CONFIGURATION (OPTIONAL)
+# 6. FIREWALL CONFIGURATION (OPTIONAL)
 # ==========================================
 Write-Host "`nConfiguring Windows Firewall..." -ForegroundColor Yellow
 
@@ -212,7 +154,7 @@ try {
     if (-not $existingRule) {
         New-NetFirewallRule -DisplayName $ruleName `
                             -Direction Outbound `
-                            -Program $nodePath `
+                            -Program $appPath `
                             -Action Allow `
                             -Profile Any `
                             -Enabled True | Out-Null
@@ -221,11 +163,11 @@ try {
         Write-Host "✅ Firewall rule already exists" -ForegroundColor Green
     }
 } catch {
-    Write-Host "⚠️  Could not configure firewall. You may need to allow Node.js manually." -ForegroundColor Yellow
+    Write-Host "⚠️  Could not configure firewall. You may need to allow the binary manually." -ForegroundColor Yellow
 }
 
 # ==========================================
-# 9. SUMMARY
+# 7. SUMMARY
 # ==========================================
 Write-Host "`n========================================" -ForegroundColor Cyan
 Write-Host "✅ INSTALLATION COMPLETE!" -ForegroundColor Green
@@ -234,14 +176,13 @@ Write-Host ""
 Write-Host "Installation Details:" -ForegroundColor White
 Write-Host "  • Installation Directory: $InstallDir" -ForegroundColor Gray
 Write-Host "  • Service Name: $serviceName" -ForegroundColor Gray
-Write-Host "  • Node.js Version: $nodeVersion" -ForegroundColor Gray
 Write-Host "  • Agent Name: $AgentName" -ForegroundColor Gray
 Write-Host ""
 Write-Host "Useful Commands:" -ForegroundColor White
 Write-Host "  • Check status:  Get-Service -Name $serviceName" -ForegroundColor Gray
 Write-Host "  • Stop service:  Stop-Service -Name $serviceName" -ForegroundColor Gray
 Write-Host "  • Start service: Start-Service -Name $serviceName" -ForegroundColor Gray
-Write-Host "  • View logs:     Get-Content '$InstallDir\agent\logs\stdout.log' -Tail 50" -ForegroundColor Gray
+Write-Host "  • View logs:     Get-Content '$InstallDir\logs\stdout.log' -Tail 50" -ForegroundColor Gray
 Write-Host ""
 Write-Host "The agent should now appear in your Nexus dashboard!" -ForegroundColor Green
 Write-Host ""
