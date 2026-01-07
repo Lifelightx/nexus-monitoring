@@ -9,17 +9,18 @@ const connectDB = require('./config/db');
 const authRoutes = require('./routes/authRoutes');
 const agentRoutes = require('./routes/agentRoutes');
 const dockerRoutes = require('./routes/dockerRoutes');
+const traceRoutes = require('./routes/traceRoutes');
 const socketHandler = require('./socket');
 const logger = require('./utils/logger');
-const { scheduleAlertCleanup } = require('./services/schedulerService');
+const { initializeSchedulers } = require('./services/schedulerService');
 
 const seedAdminUser = require('./utils/seeder');
 
 dotenv.config();
 connectDB().then(() => {
     seedAdminUser();
-    // Initialize alert auto-cleanup scheduler
-    scheduleAlertCleanup();
+    // Initialize all schedulers (alert cleanup + metrics aggregation)
+    initializeSchedulers();
 });
 
 const app = express();
@@ -52,10 +53,12 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpecs));
 app.use('/api/auth', authRoutes);
 app.use('/api/agents', agentRoutes);
 app.use('/api/agents', dockerRoutes);
+app.use('/api', traceRoutes); // Trace routes
 app.use('/api/install', require('./routes/installRoutes'));
 app.use('/api/agents', require('./routes/systemRoutes'));
 app.use('/api/metrics', require('./routes/metricRoutes'));
 app.use('/api/deploy', require('./routes/deployRoutes'));
+app.use('/api', require('./routes/services')); // APM service routes
 // IMPORTANT: Register settings routes BEFORE alert routes to prevent path conflicts
 app.use('/api/alerts/settings', require('./routes/alertSettingsRoutes'));
 app.use('/api/alerts', require('./routes/alertRoutes'));

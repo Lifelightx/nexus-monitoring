@@ -1,5 +1,6 @@
 const cron = require('node-cron');
 const alertService = require('../services/alertService');
+const { startMetricsAggregation } = require('../services/metricsAggregationService');
 const logger = require('../utils/logger');
 
 /**
@@ -27,4 +28,13 @@ function scheduleAlertCleanup() {
     logger.info('Alert auto-cleanup scheduler initialized (runs every hour)');
 }
 
-module.exports = { scheduleAlertCleanup };
+/**
+ * Initialize all schedulers
+ */
+function initializeSchedulers() {
+    scheduleAlertCleanup();
+    startMetricsAggregation();
+    logger.info('All schedulers initialized');
+}
+
+module.exports = { scheduleAlertCleanup, initializeSchedulers };
