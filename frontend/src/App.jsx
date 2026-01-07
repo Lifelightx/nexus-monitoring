@@ -27,6 +27,11 @@ import Metrics from './pages/dashboard/Metrics';
 import AlertsPage from './pages/alerts/AlertsPage';
 import Settings from './pages/dashboard/Settings';
 import Servers from './pages/server/Servers';
+import GlobalDashboard from './pages/apm/GlobalDashboard';
+import ServicesList from './pages/apm/ServicesList';
+import ServiceDetails from './pages/apm/ServiceDetails';
+import TraceExplorer from './pages/apm/TraceExplorer';
+import TraceWaterfall from './pages/apm/TraceWaterfall';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -112,21 +117,35 @@ function App() {
                 {/* Protected Routes wrapped in MainLayout */}
                 <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
                   <Route path="/dashboard" element={<Dashboard />} />
+
+                  {/* Infrastructure Routes */}
                   <Route path="/servers" element={<Servers />} />
                   <Route path="/metrics" element={<Metrics />} />
                   <Route path="/alerts" element={<AlertsPage />} />
                   <Route path="/settings" element={<Settings />} />
+
+                  {/* APM Routes - Standalone */}
+                  <Route path="/traces/:traceId/details" element={<TraceWaterfall />} />
 
                   {/* Server Routes wrapped in ServerLayout */}
                   <Route path="/server/:id" element={<ServerLayout />}>
                     <Route index element={<Navigate to="overview" replace />} />
                     <Route path="overview" element={<ServerOverview />} />
                     <Route path="metrics" element={<ServerMetrics />} />
+
+                    {/* APM Routes - Host Specific */}
+                    <Route path="services" element={<ServicesList />} />
+                    <Route path="services/:serviceName" element={<ServiceDetails />} />
+                    <Route path="traces/:serviceId" element={<TraceExplorer />} />
+                    <Route path="traces/:traceId/details" element={<TraceWaterfall />} />
+
+                    {/* Docker Routes */}
                     <Route path="docker" element={<Navigate to="containers" replace />} />
                     <Route path="docker/:tab" element={<DockerDetailsWrapper />} />
                     <Route path="docker/images/:imageName" element={<DockerImageDetailsWrapper />} />
                     <Route path="docker/networks/:networkName" element={<DockerNetworkDetailsWrapper />} />
                     <Route path="docker/containers/:containerName" element={<ContainerDetailsWrapper />} />
+
                     <Route path="logs" element={<ServerLogs />} />
                     <Route path="agent-info" element={<AgentInfo />} />
                     <Route path="files" element={<FileExplorer />} />

@@ -28,6 +28,8 @@ const Sidebar = () => {
     const serverMenuItems = [
         { name: 'Overview', icon: 'fas fa-info-circle', path: `/server/${serverId}/overview` },
         { name: 'Metrics', icon: 'fas fa-chart-area', path: `/server/${serverId}/metrics` },
+        { name: 'Services', icon: 'fas fa-cube', path: `/server/${serverId}/services` },
+        { name: 'Traces', icon: 'fas fa-stream', path: `/server/${serverId}/traces` },
         {
             name: 'Docker',
             icon: 'fab fa-docker',
