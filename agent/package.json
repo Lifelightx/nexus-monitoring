@@ -18,8 +18,10 @@
     "dotenv": "^17.2.3",
     "node-pty": "^1.1.0",
     "nodemon": "^3.1.11",
+    "shimmer": "^1.2.1",
     "socket.io-client": "^4.8.1",
-    "systeminformation": "^5.27.11"
+    "systeminformation": "^5.27.11",
+    "uuid": "^13.0.0"
   },
   "bin": "index.js",
   "pkg": {

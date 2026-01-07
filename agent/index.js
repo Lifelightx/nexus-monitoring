@@ -3,6 +3,8 @@ const io = require('socket.io-client');
 const { collectSystemMetrics } = require('./collectors/systemCollector');
 const { collectDockerData } = require('./collectors/dockerCollector');
 const { collectAgentInfo } = require('./collectors/agentCollector');
+const { collectProcessData } = require('./collectors/processCollector');
+const { detectServices } = require('./collectors/serviceDetector');
 
 const SERVER_URL = process.env.SERVER_URL || 'http://localhost:3000';
 const AGENT_NAME = process.env.AGENT_NAME || require('os').hostname();
@@ -224,11 +226,18 @@ async function sendMetrics() {
         // Collect all metrics
         const systemMetrics = await collectSystemMetrics();
         const dockerData = await collectDockerData();
+        const processData = await collectProcessData();
 
         if (!systemMetrics) {
             console.error('Failed to collect system metrics');
             return;
         }
+
+        // Detect services from processes and containers
+        const services = detectServices(
+            processData.serviceProcesses,
+            dockerData.containers
+        );
 
         const metrics = {
             agent: AGENT_NAME,
@@ -240,7 +249,13 @@ async function sendMetrics() {
                 image: c.image,
                 state: c.state,
             })),
-            dockerDetails: dockerData
+            dockerDetails: dockerData,
+            processes: {
+                total: processData.totalProcesses,
+                services: processData.totalServices,
+                list: processData.serviceProcesses.slice(0, 20) // Send top 20
+            },
+            services: services // Detected services
         };
 
         socket.emit('agent:metrics', metrics);
