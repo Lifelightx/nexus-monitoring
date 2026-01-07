@@ -139,6 +139,25 @@ module.exports = (io, app) => {
                     uptime: data.uptime
                 });
 
+                // Store service and process data
+                if (data.services || data.processes) {
+                    const serviceController = require('../controllers/serviceController');
+
+                    // console.log('📊 Received service/process data:', {
+                    //     servicesCount: data.services?.length || 0,
+                    //     processesCount: data.processes?.list?.length || 0
+                    // });
+
+                    if (data.services && Array.isArray(data.services)) {
+                        // console.log('💾 Storing services:', data.services.map(s => ({ name: s.name, port: s.port })));
+                        await serviceController.updateServicesFromMetrics(agentInfo._id, data.services);
+                    }
+
+                    if (data.processes && data.processes.list && Array.isArray(data.processes.list)) {
+                        await serviceController.storeProcessData(agentInfo._id, data.processes.list);
+                    }
+                }
+
                 // Detect alerts
                 const alertService = require('../services/alertService');
                 const previousMetric = await Metric.findOne({ agent: agentInfo._id })
