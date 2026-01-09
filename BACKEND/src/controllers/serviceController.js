@@ -129,6 +129,9 @@ exports.updateServicesFromMetrics = async (agentId, servicesData) => {
             return;
         }
 
+        // Get current service ports from agent data
+        const currentServicePorts = new Set(servicesData.map(s => s.port));
+
         for (const serviceData of servicesData) {
             await Service.findOneAndUpdate(
                 {
@@ -138,7 +141,9 @@ exports.updateServicesFromMetrics = async (agentId, servicesData) => {
                 {
                     ...serviceData,
                     agentId: agentId,
-                    lastSeen: new Date()
+                    lastSeen: new Date(),
+                    // Use status from agent data (reflects actual container/process state)
+                    status: serviceData.status || 'running'
                 },
                 {
                     upsert: true,
@@ -147,16 +152,16 @@ exports.updateServicesFromMetrics = async (agentId, servicesData) => {
             );
         }
 
-        // Mark services as stopped if not seen in last 2 minutes
-        const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
+        // Mark services as stopped if they're not in the current agent data
+        // This handles containers that were stopped/removed
         await Service.updateMany(
             {
                 agentId: agentId,
-                lastSeen: { $lt: twoMinutesAgo },
+                port: { $nin: Array.from(currentServicePorts) },
                 status: 'running'
             },
             {
-                status: 'stopped'
+                $set: { status: 'stopped' }
             }
         );
     } catch (error) {

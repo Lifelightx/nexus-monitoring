@@ -95,6 +95,27 @@ async function ingestTraces(req, res) {
             }
         }
 
+        // Broadcast new traces to connected dashboards via WebSocket
+        if (savedTraces.length > 0) {
+            const io = req.app.get('io');
+            if (io) {
+                io.to('dashboards').emit('trace:new', {
+                    count: savedTraces.length,
+                    traces: savedTraces.map(t => ({
+                        trace_id: t.trace_id,
+                        service_name: t.service_name,
+                        service_id: t.service_id,
+                        endpoint: t.endpoint,
+                        duration_ms: t.duration_ms,
+                        status_code: t.status_code,
+                        error: t.error,
+                        timestamp: t.timestamp
+                    }))
+                });
+                console.log(`[Trace] 📡 Broadcasted ${savedTraces.length} new traces to dashboards`);
+            }
+        }
+
         res.status(201).json({
             success: true,
             message: `Ingested ${savedTraces.length} traces and ${spans?.length || 0} spans`

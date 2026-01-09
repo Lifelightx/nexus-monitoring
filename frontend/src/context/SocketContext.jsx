@@ -20,6 +20,19 @@ export const SocketProvider = ({ children }) => {
             reconnectionDelay: 1000,
         });
 
+        // Connection event listeners
+        newSocket.on('connect', () => {
+            console.log('✅ Socket connected:', newSocket.id);
+        });
+
+        newSocket.on('disconnect', (reason) => {
+            console.log('❌ Socket disconnected:', reason);
+        });
+
+        newSocket.on('connect_error', (error) => {
+            console.error('🔴 Socket connection error:', error);
+        });
+
         setSocket(newSocket);
 
         // Cleanup on unmount

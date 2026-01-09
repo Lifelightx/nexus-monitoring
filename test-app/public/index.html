@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -27,7 +28,7 @@
             background: white;
             padding: 30px;
             border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
             margin-bottom: 30px;
         }
 
@@ -52,7 +53,7 @@
             background: white;
             padding: 25px;
             border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
         }
 
         .card h2 {
@@ -181,17 +182,20 @@
             display: inline-block;
             width: 14px;
             height: 14px;
-            border: 2px solid rgba(255,255,255,0.3);
+            border: 2px solid rgba(255, 255, 255, 0.3);
             border-top-color: white;
             border-radius: 50%;
             animation: spin 0.6s linear infinite;
         }
 
         @keyframes spin {
-            to { transform: rotate(360deg); }
+            to {
+                transform: rotate(360deg);
+            }
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <div class="header">
@@ -200,29 +204,71 @@
         </div>
 
         <div class="grid">
-            <!-- API Endpoints -->
+            <!-- Basic Endpoints -->
             <div class="card">
-                <h2>📡 API Endpoints</h2>
+                <h2>📡 Basic Endpoints</h2>
                 <button class="btn btn-primary" onclick="callAPI('/api/users', 'GET')">
                     <span>GET</span> /api/users
                 </button>
                 <button class="btn btn-success" onclick="callAPI('/api/users', 'POST')">
                     <span>POST</span> /api/users
                 </button>
-                <button class="btn btn-warning" onclick="callAPI('/api/slow', 'GET')">
-                    <span>GET</span> /api/slow (Slow)
-                </button>
-                <button class="btn btn-danger" onclick="callAPI('/api/error', 'GET')">
-                    <span>GET</span> /api/error (Error)
-                </button>
                 <button class="btn btn-primary" onclick="callAPI('/health', 'GET')">
                     <span>GET</span> /health
                 </button>
             </div>
 
+            <!-- Performance Testing -->
+            <div class="card">
+                <h2>⚡ Performance Testing</h2>
+                <button class="btn btn-warning" onclick="callAPI('/api/slow', 'GET')">
+                    <span>GET</span> /api/slow
+                </button>
+                <button class="btn btn-primary" onclick="callAPI('/api/nested', 'GET')">
+                    <span>GET</span> /api/nested
+                </button>
+                <button class="btn btn-primary" onclick="callAPI('/api/parallel', 'GET')">
+                    <span>GET</span> /api/parallel
+                </button>
+                <button class="btn btn-primary" onclick="callAPI('/api/mixed', 'GET')">
+                    <span>GET</span> /api/mixed
+                </button>
+                <button class="btn btn-warning" onclick="callAPI('/api/timeout', 'GET')">
+                    <span>GET</span> /api/timeout (3s)
+                </button>
+            </div>
+
+            <!-- Heavy Operations -->
+            <div class="card">
+                <h2>💪 Heavy Operations</h2>
+                <button class="btn btn-primary" onclick="callAPI('/api/db-heavy', 'GET')">
+                    <span>GET</span> /api/db-heavy
+                </button>
+                <button class="btn btn-primary" onclick="callAPI('/api/external-heavy', 'GET')">
+                    <span>GET</span> /api/external-heavy
+                </button>
+                <button class="btn btn-primary" onclick="callAPI('/api/cpu-intensive', 'GET')">
+                    <span>GET</span> /api/cpu-intensive
+                </button>
+                <button class="btn btn-success" onclick="callAPI('/api/bulk-insert', 'POST')">
+                    <span>POST</span> /api/bulk-insert
+                </button>
+            </div>
+
+            <!-- Error Testing -->
+            <div class="card">
+                <h2>🔴 Error Testing</h2>
+                <button class="btn btn-danger" onclick="callAPI('/api/error', 'GET')">
+                    <span>GET</span> /api/error (500)
+                </button>
+                <button class="btn btn-danger" onclick="callAPI('/api/exception', 'GET')">
+                    <span>GET</span> /api/exception
+                </button>
+            </div>
+
             <!-- Load Testing -->
             <div class="card">
-                <h2>⚡ Load Testing</h2>
+                <h2>🚀 Load Testing</h2>
                 <button class="btn btn-primary" onclick="loadTest(10)">
                     Send 10 Requests
                 </button>
@@ -283,7 +329,7 @@
             const timestamp = new Date().toLocaleTimeString();
             entry.textContent = `[${timestamp}] ${message}`;
             logDiv.insertBefore(entry, logDiv.firstChild);
-            
+
             // Keep only last 100 entries
             while (logDiv.children.length > 100) {
                 logDiv.removeChild(logDiv.lastChild);
@@ -338,10 +384,10 @@
 
         async function loadTest(count) {
             log(`🚀 Starting load test: ${count} requests to /api/users`);
-            
+
             for (let i = 0; i < count; i++) {
                 if (!loadTestInterval) break;
-                
+
                 try {
                     totalRequests++;
                     const response = await fetch('/api/users');
@@ -351,18 +397,18 @@
                         errorCount++;
                     }
                     updateStats();
-                    
+
                     if (i % 10 === 0) {
                         log(`Progress: ${i + 1}/${count} requests sent`);
                     }
-                    
+
                     await new Promise(resolve => setTimeout(resolve, 100));
                 } catch (error) {
                     errorCount++;
                     updateStats();
                 }
             }
-            
+
             log(`✅ Load test complete: ${count} requests sent`);
             loadTestInterval = null;
         }
@@ -376,4 +422,5 @@
         log('🎯 APM Test Dashboard ready! Click buttons to generate traces.');
     </script>
 </body>
+
 </html>

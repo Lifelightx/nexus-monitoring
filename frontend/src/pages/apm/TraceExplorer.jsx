@@ -1,12 +1,14 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { getServiceTraces } from '../../services/apmService';
+import { useSocket } from '../../context/SocketContext';
 import StatusBadge from '../../components/shared/StatusBadge';
 import TimeRangeSelector from '../../components/shared/TimeRangeSelector';
 
 const TraceExplorer = () => {
     const navigate = useNavigate();
-    const { serviceId } = useParams(); // Get service ID directly from URL
+    const { serviceId } = useParams();
+    const socket = useSocket(); // Get socket from context
     const [timeRange, setTimeRange] = useState('1h');
     const [serviceFilter, setServiceFilter] = useState('all');
     const [statusFilter, setStatusFilter] = useState('all');
@@ -78,6 +80,35 @@ const TraceExplorer = () => {
 
         fetchTraces();
     }, [serviceId, timeRange, statusFilter]);
+
+    // Listen for real-time trace updates
+    useEffect(() => {
+        if (!socket) {
+            console.warn('⚠️ Socket not connected');
+            return;
+        }
+
+        const handleNewTraces = (data) => {
+            console.log('📡 Received new traces:', data);
+
+            // Filter for current service
+            const relevantTraces = data.traces.filter(t =>
+                t.service_id?.toString() === serviceId
+            );
+
+            if (relevantTraces.length > 0) {
+                console.log(`✅ Adding ${relevantTraces.length} new traces`);
+                setTraces(prev => [...relevantTraces, ...prev]);
+            }
+        };
+
+        socket.on('trace:new', handleNewTraces);
+        console.log('👂 Listening for traces on service:', serviceId);
+
+        return () => {
+            socket.off('trace:new', handleNewTraces);
+        };
+    }, [socket, serviceId]);
 
     // Get unique services for filter
     const services = [...new Set(traces.map(t => t.service_name))];
@@ -221,10 +252,7 @@ const TraceExplorer = () => {
                                 return (
                                     <tr
                                         key={trace._id || trace.trace_id}
-                                        onClick={() => {
-                                            const { id: agentId } = window.location.pathname.match(/\/server\/(?<id>[^/]+)/)?.groups || {};
-                                            navigate(agentId ? `/server/${agentId}/traces/${trace.trace_id}/details` : `/traces/${trace.trace_id}/details`);
-                                        }}
+                                        onClick={() => navigate(`/traces/${trace.trace_id}/details`)}
                                         className="border-b border-white/5 hover:bg-white/5 transition-colors cursor-pointer group"
                                     >
                                         <td className="p-4 text-sm text-text-secondary">

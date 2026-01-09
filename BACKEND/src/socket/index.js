@@ -69,7 +69,14 @@ module.exports = (io, app) => {
 
         logger.info(`New Connection: ${clientType}`, { socketId: socket.id, ip: socket.handshake.address });
 
-        // Dashboard subscription
+        // Auto-join dashboard clients to 'dashboards' room for real-time updates
+        if (!agentName) {
+            socket.join('dashboards');
+            dashboardClients.add(socket.id);
+            logger.info(`Dashboard client auto-joined 'dashboards' room: ${socket.id}`);
+        }
+
+        // Dashboard subscription (legacy - kept for compatibility)
         socket.on('agent:list:subscribe', async () => {
             socket.join('dashboards');
             dashboardClients.add(socket.id);
