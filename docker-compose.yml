@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  nexus-test-app:
+    container_name: test-app-container
+    build:
+      context: .
+      dockerfile: test-app/Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      - MONGO_URI=mongodb://mongo:27017/test-apm
+      # Backend URL needed for agent to send data
+      - SERVER_URL=http://host.docker.internal:3000
+      - SERVICE_NAME=test-app-container
+      - INSTRUMENT_NODEJS=true
+      - AGENT_TOKEN=your-agent-token
+      # Runtime Agent Injection
+      - NODE_OPTIONS=--require /opt/nexus-agent/instrumentation/nodejs/index.js
+    volumes:
+      # Mount the agent from the host
+      - /opt/nexus-agent/instrumentation:/opt/nexus-agent/instrumentation:ro
+    depends_on:
+      - mongo
+    extra_hosts:
+      # Allow container to access host localhost
+      - "host.docker.internal:host-gateway"
+    networks:
+      - nexus-network
+
+  mongo:
+    image: mongo:6
+    ports:
+      - "27018:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - nexus-network
+
+networks:
+  nexus-network:
+    driver: bridge
+
+volumes:
+  mongo_data:

@@ -14,10 +14,11 @@ export const SocketProvider = ({ children }) => {
     useEffect(() => {
         // Initialize socket connection
         const newSocket = io(API_BASE_URL, {
-            transports: ['websocket'], // Force websocket to avoid polling issues
+            transports: ['websocket', 'polling'], // Allow polling fallback
             reconnection: true,
-            reconnectionAttempts: 5,
+            reconnectionAttempts: 10,
             reconnectionDelay: 1000,
+            timeout: 10000,
         });
 
         // Connection event listeners

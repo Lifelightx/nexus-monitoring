@@ -38,15 +38,20 @@ const AddServerModal = ({ onClose }) => {
         } else if (platform === 'windows') {
             const cmd = `Invoke-WebRequest -Uri "${serverUrl}/api/install/script/windows" -OutFile "$env:TEMP\\install-nexus.ps1"; & "$env:TEMP\\install-nexus.ps1" -ServerUrl "${serverUrl}" -AgentToken "${token}"`;
             setCommand(cmd);
+        } else if (platform === 'macos') {
+            const cmd = `curl -sL ${serverUrl}/api/install/script/macos | sudo bash -s ${serverUrl} ${token}`;
+            setCommand(cmd);
         }
     }, [platform, token]);
 
     const copyToClipboard = async () => {
+        // ... (copy logic unchanged) ...
         try {
             await navigator.clipboard.writeText(command);
             setCopied(true);
             setTimeout(() => setCopied(false), 2000);
         } catch (err) {
+            // ... (fallback copy logic) ...
             console.error('Failed to copy:', err);
             // Fallback for older browsers
             const textArea = document.createElement('textarea');
@@ -68,7 +73,7 @@ const AddServerModal = ({ onClose }) => {
 
     return (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
-            <div className="bg-bg-secondary border border-white/10 rounded-xl w-full max-w-3xl overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-bg-secondary border border-white/10 rounded-xl w-full max-w-4xl overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
                 <div className="p-6 border-b border-white/10 flex justify-between items-center">
                     <h2 className="text-xl font-bold text-white">Add New Server</h2>
                     <button onClick={onClose} className="text-text-secondary hover:text-white transition-colors">
@@ -80,7 +85,7 @@ const AddServerModal = ({ onClose }) => {
                     {/* Platform Selection */}
                     <div className="mb-6">
                         <label className="block text-sm font-medium text-white mb-3">Select Server Platform</label>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-3 gap-4">
                             <button
                                 onClick={() => setPlatform('linux')}
                                 className={`p-4 rounded-lg border-2 transition-all ${platform === 'linux'
@@ -92,7 +97,7 @@ const AddServerModal = ({ onClose }) => {
                                     <i className="fab fa-linux text-2xl"></i>
                                     <div className="text-left">
                                         <div className="font-semibold">Linux</div>
-                                        <div className="text-xs opacity-75">Ubuntu, Debian, CentOS, etc.</div>
+                                        <div className="text-xs opacity-75">Ubuntu, Debian, CentOS</div>
                                     </div>
                                 </div>
                             </button>
@@ -108,7 +113,23 @@ const AddServerModal = ({ onClose }) => {
                                     <i className="fab fa-windows text-2xl"></i>
                                     <div className="text-left">
                                         <div className="font-semibold">Windows</div>
-                                        <div className="text-xs opacity-75">Windows 10, Server 2016+</div>
+                                        <div className="text-xs opacity-75">10, Server 2016+</div>
+                                    </div>
+                                </div>
+                            </button>
+
+                            <button
+                                onClick={() => setPlatform('macos')}
+                                className={`p-4 rounded-lg border-2 transition-all ${platform === 'macos'
+                                    ? 'border-accent bg-accent/10 text-white'
+                                    : 'border-white/10 bg-white/5 text-text-secondary hover:border-white/20'
+                                    }`}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <i className="fab fa-apple text-2xl"></i>
+                                    <div className="text-left">
+                                        <div className="font-semibold">MacOS</div>
+                                        <div className="text-xs opacity-75">Intel / Apple Silicon</div>
                                     </div>
                                 </div>
                             </button>
@@ -116,9 +137,9 @@ const AddServerModal = ({ onClose }) => {
                     </div>
 
                     <p className="text-text-secondary mb-4">
-                        {platform === 'linux'
-                            ? 'Run the following command in your Linux terminal with sudo privileges:'
-                            : 'Run the following command in PowerShell as Administrator:'}
+                        {platform === 'linux' ? 'Run the following command in your Linux terminal with sudo privileges:' :
+                            platform === 'macos' ? 'Run the following command in your Terminal with sudo privileges:' :
+                                'Run the following command in PowerShell as Administrator:'}
                     </p>
 
                     <div className="relative group">
@@ -155,19 +176,25 @@ const AddServerModal = ({ onClose }) => {
                         <div>
                             <p className="font-medium text-blue-400 mb-1">Requirements</p>
                             <ul className="list-disc list-inside space-y-1 text-xs">
-                                {platform === 'linux' ? (
+                                {platform === 'linux' && (
                                     <>
                                         <li>Linux OS (Ubuntu, Debian, CentOS, RHEL, etc.)</li>
                                         <li>Internet access to download dependencies</li>
                                         <li>Root/Sudo privileges</li>
-                                        <li>Node.js v16+ (auto-installed if missing)</li>
                                     </>
-                                ) : (
+                                )}
+                                {platform === 'windows' && (
                                     <>
                                         <li>Windows 10 or Windows Server 2016+</li>
-                                        <li>PowerShell 5.1 or higher</li>
+                                        <li>PowerShell 5.1 or highter</li>
                                         <li>Administrator privileges</li>
-                                        <li>Node.js v16+ (must be pre-installed)</li>
+                                    </>
+                                )}
+                                {platform === 'macos' && (
+                                    <>
+                                        <li>MacOS 10.15+ (Catalina or newer)</li>
+                                        <li>Intel or Apple Silicon (M1/M2/M3)</li>
+                                        <li>Administrator privileges (sudo)</li>
                                     </>
                                 )}
                             </ul>

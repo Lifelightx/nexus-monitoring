@@ -24,6 +24,14 @@ const agentSchema = new mongoose.Schema({
     registeredAt: {
         type: Date,
         default: Date.now,
+    },
+    latestDockerInfo: {
+        type: Object, // Stores dockerDetails
+        default: {}
+    },
+    latestSystemMetrics: {
+        type: Object, // Stores cpu, memory, disk, network
+        default: {}
     }
 });
 

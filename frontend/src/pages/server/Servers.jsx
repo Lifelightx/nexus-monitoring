@@ -43,9 +43,15 @@ const Servers = () => {
             // Listen for individual agent updates
             const handleAgentUpdate = (updatedAgent) => {
                 console.log('Received agent update:', updatedAgent);
-                setAgents(prev =>
-                    prev.map(a => a._id === updatedAgent._id ? updatedAgent : a)
-                );
+                setAgents(prev => {
+                    const exists = prev.find(a => a._id === updatedAgent._id);
+                    if (exists) {
+                        return prev.map(a => a._id === updatedAgent._id ? updatedAgent : a);
+                    } else {
+                        // If agent logic doesn't exist yet, we should probably add it
+                        return [...prev, updatedAgent];
+                    }
+                });
             };
 
             socket.on('agent:list:updated', handleAgentListUpdate);

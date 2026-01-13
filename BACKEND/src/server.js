@@ -8,6 +8,7 @@ const swaggerSpecs = require('./config/swagger');
 const connectDB = require('./config/db');
 const authRoutes = require('./routes/authRoutes');
 const agentRoutes = require('./routes/agentRoutes');
+const agentHttpRoutes = require('./routes/agentHttpRoutes');
 const dockerRoutes = require('./routes/dockerRoutes');
 const traceRoutes = require('./routes/traceRoutes');
 const socketHandler = require('./socket');
@@ -27,7 +28,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
     cors: {
-        origin: ["http://localhost:5173", "http://192.168.56.1:5173", "http://10.163.41.142:5173", "http://192.168.13.73:5173"],
+        origin: "*",
         methods: ["GET", "POST"]
     }
 });
@@ -36,15 +37,19 @@ const port = process.env.PORT || 3000;
 const host = process.env.SERVER_HOST || 'localhost';
 
 // Store socket.io instance and agent socket mappings in app
+const EventEmitter = require('events');
+const eventBus = new EventEmitter();
+// Increase max listeners to prevent memory leak warnings if many concurrent commands
+eventBus.setMaxListeners(50);
+
 app.set('io', io);
 app.set('agentSockets', new Map());
+app.set('eventBus', eventBus);
 
 // Middleware
-app.use(cors({
-    origin: ["http://localhost:5173", "http://192.168.56.1:5173", "http://10.163.41.142:5173", "http://192.168.13.73:5173"],
-    credentials: true
-}));
-app.use(express.json());
+app.use(cors());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Documentation
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpecs));
@@ -52,6 +57,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpecs));
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/agents', agentRoutes);
+app.use('/api/agent', agentHttpRoutes); // HTTP agent communication
 app.use('/api/agents', dockerRoutes);
 app.use('/api', traceRoutes); // Trace routes
 app.use('/api/install', require('./routes/installRoutes'));

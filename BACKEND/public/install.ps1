@@ -1,188 +1,88 @@
-# Nexus Agent Installation Script for Windows (Standalone Binary Version)
-# Run this script in PowerShell as Administrator
+<#
+.SYNOPSIS
+Nexus Agent Installation Script (Windows)
+#>
 
-param(
-    [Parameter(Mandatory=$true)]
+param (
     [string]$ServerUrl,
-    
-    [Parameter(Mandatory=$true)]
-    [string]$AgentToken,
-    
-    [string]$InstallDir = "C:\Program Files\nexus-agent",
-    [string]$AgentName = $env:COMPUTERNAME
+    [string]$AgentToken
 )
 
-Write-Host "Installing Nexus Agent (Standalone)..." -ForegroundColor Cyan
-Write-Host "Server: $ServerUrl"
-Write-Host "Agent Name: $AgentName"
-
-# ==========================================
-# 1. CREATE INSTALLATION DIRECTORY
-# ==========================================
-Write-Host "`nSetting up installation directory..." -ForegroundColor Yellow
-
-if (Test-Path $InstallDir) {
-    Write-Host "⚠️  Installation directory already exists. Removing old files..." -ForegroundColor Yellow
-    Remove-Item -Path $InstallDir -Recurse -Force
-}
-
-New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
-New-Item -ItemType Directory -Path "$InstallDir\logs" -Force | Out-Null
-
-# ==========================================
-# 2. DOWNLOAD AGENT BINARY
-# ==========================================
-Write-Host "`nDownloading agent binary..." -ForegroundColor Yellow
-
-$binaryName = "agent-win.exe"
-$url = "$ServerUrl/api/install/files/agent-win.exe"
-$destination = Join-Path $InstallDir $binaryName
-
-try {
-    Invoke-WebRequest -Uri $url -OutFile $destination -UseBasicParsing
-    Write-Host "✅ Agent binary downloaded successfully" -ForegroundColor Green
-} catch {
-    Write-Host "❌ Failed to download agent binary" -ForegroundColor Red
-    Write-Host "Error: $_" -ForegroundColor Red
+if (-not $ServerUrl -or -not $AgentToken) {
+    Write-Host "Usage: .\install.ps1 -ServerUrl <URL> -AgentToken <TOKEN>" -ForegroundColor Red
     exit 1
 }
 
-# ==========================================
-# 3. CREATE CONFIGURATION FILE
-# ==========================================
-Write-Host "`nCreating configuration..." -ForegroundColor Yellow
+$InstallDir = "C:\Program Files\NexusAgent"
+$ConfigDir = "C:\ProgramData\NexusAgent"
+$LogDir = "C:\ProgramData\NexusAgent\logs"
+$BinaryPath = "$InstallDir\nexus-agent.exe"
+$ConfigPath = "$ConfigDir\agent.conf"
 
-$envContent = @"
-SERVER_URL=$ServerUrl
-AGENT_TOKEN=$AgentToken
-AGENT_NAME=$AgentName
-INTERVAL=5000
+Write-Host "Installing Nexus Agent (Windows)..." -ForegroundColor Cyan
+Write-Host "Server: $ServerUrl"
+
+# 1. Create Directories
+New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
+New-Item -ItemType Directory -Force -Path $ConfigDir | Out-Null
+New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
+
+# 2. Download Binary
+Write-Host "Downloading agent binary..."
+try {
+    Invoke-WebRequest -Uri "$ServerUrl/api/install/files/agent-windows.exe" -OutFile $BinaryPath
+} catch {
+    Write-Host "Failed to download agent binary: $_" -ForegroundColor Red
+    exit 1
+}
+
+# 3. Configure Agent
+Write-Host "Configuring agent..."
+$Hostname = $env:COMPUTERNAME
+$ConfigContent = @"
+[agent]
+name = sysProbe-$Hostname
+backend_url = $ServerUrl
+token = $AgentToken
+command_poll_ms = 500
+
+[metrics]
+collection_interval = 5
+
+[docker]
+enabled = false
+# socket_path is typically named pipe on Windows: //./pipe/docker_engine
+socket_path = //./pipe/docker_engine
+
+[logging]
+level = info
+file = $LogDir\agent.log
 "@
 
-$envContent | Out-File -FilePath "$InstallDir\.env" -Encoding UTF8
-Write-Host "✅ Configuration created" -ForegroundColor Green
+Set-Content -Path $ConfigPath -Value $ConfigContent
 
-# ==========================================
-# 4. CREATE WINDOWS SERVICE
-# ==========================================
-Write-Host "`nSetting up Windows Service..." -ForegroundColor Yellow
+# 4. Register Service
+Write-Host "Registering service..."
+$ServiceName = "NexusAgent"
 
-# Install NSSM (Non-Sucking Service Manager) if not already installed
-$nssmPath = "C:\nssm\nssm.exe"
-
-if (-not (Test-Path $nssmPath)) {
-    Write-Host "  Installing NSSM (Service Manager)..." -ForegroundColor Gray
-    
-    $nssmZip = "$env:TEMP\nssm.zip"
-    $nssmExtract = "$env:TEMP\nssm"
-    
-    try {
-        Invoke-WebRequest -Uri "https://nssm.cc/release/nssm-2.24.zip" -OutFile $nssmZip -UseBasicParsing
-        Expand-Archive -Path $nssmZip -DestinationPath $nssmExtract -Force
-        
-        New-Item -ItemType Directory -Path "C:\nssm" -Force | Out-Null
-        Copy-Item -Path "$nssmExtract\nssm-2.24\win64\nssm.exe" -Destination $nssmPath -Force
-        
-        Remove-Item -Path $nssmZip -Force
-        Remove-Item -Path $nssmExtract -Recurse -Force
-        
-        Write-Host "  ✅ NSSM installed" -ForegroundColor Green
-    } catch {
-        Write-Host "  ❌ Failed to install NSSM" -ForegroundColor Red
-        Write-Host "  Please download manually from https://nssm.cc/download" -ForegroundColor Yellow
-        exit 1
-    }
-}
-
-# Remove existing service if it exists
-$serviceName = "NexusAgent"
-$existingService = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
-
-if ($existingService) {
-    Write-Host "  Removing existing service..." -ForegroundColor Gray
-    & $nssmPath stop $serviceName
-    & $nssmPath remove $serviceName confirm
-}
-
-# Install the service
-Write-Host "  Creating Windows Service..." -ForegroundColor Gray
-
-$appPath = "$InstallDir\$binaryName"
-
-& $nssmPath install $serviceName $appPath
-& $nssmPath set $serviceName AppDirectory "$InstallDir"
-& $nssmPath set $serviceName DisplayName "Nexus Monitor Agent"
-& $nssmPath set $serviceName Description "Nexus monitoring agent for system and Docker metrics"
-& $nssmPath set $serviceName Start SERVICE_AUTO_START
-& $nssmPath set $serviceName AppStdout "$InstallDir\logs\stdout.log"
-& $nssmPath set $serviceName AppStderr "$InstallDir\logs\stderr.log"
-& $nssmPath set $serviceName AppRotateFiles 1
-& $nssmPath set $serviceName AppRotateBytes 1048576
-
-Write-Host "✅ Windows Service created" -ForegroundColor Green
-
-# ==========================================
-# 5. START THE SERVICE
-# ==========================================
-Write-Host "`nStarting Nexus Agent service..." -ForegroundColor Yellow
-
-try {
-    Start-Service -Name $serviceName
+# Stop if exists
+if (Get-Service $ServiceName -ErrorAction SilentlyContinue) {
+    Stop-Service $ServiceName -Force -ErrorAction SilentlyContinue
+    # Start-Process usually needed for sc.exe delete if standard cmdlet fails, but let's try New-Service -Force logic or sc.
+    # PowerShell New-Service doesn't support overwrite easily.
+    sc.exe stop $ServiceName
+    sc.exe delete $ServiceName
     Start-Sleep -Seconds 2
-    
-    $service = Get-Service -Name $serviceName
-    if ($service.Status -eq "Running") {
-        Write-Host "✅ Nexus Agent service started successfully!" -ForegroundColor Green
-    } else {
-        Write-Host "⚠️  Service status: $($service.Status)" -ForegroundColor Yellow
-    }
-} catch {
-    Write-Host "❌ Failed to start service" -ForegroundColor Red
-    Write-Host "Error: $_" -ForegroundColor Red
-    Write-Host "`nYou can manually start the service with: Start-Service -Name $serviceName" -ForegroundColor Yellow
 }
 
-# ==========================================
-# 6. FIREWALL CONFIGURATION (OPTIONAL)
-# ==========================================
-Write-Host "`nConfiguring Windows Firewall..." -ForegroundColor Yellow
+# Create Service
+# Note: BinPath must include arguments
+$BinPathWithArgs = "`"$BinaryPath`" --config `"$ConfigPath`""
+sc.exe create $ServiceName binPath= $BinPathWithArgs start= auto DisplayName= "Nexus Monitoring Agent"
+sc.exe description $ServiceName "Monitoring agent for Nexus platform"
 
-try {
-    $ruleName = "Nexus Agent Outbound"
-    $existingRule = Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue
-    
-    if (-not $existingRule) {
-        New-NetFirewallRule -DisplayName $ruleName `
-                            -Direction Outbound `
-                            -Program $appPath `
-                            -Action Allow `
-                            -Profile Any `
-                            -Enabled True | Out-Null
-        Write-Host "✅ Firewall rule created" -ForegroundColor Green
-    } else {
-        Write-Host "✅ Firewall rule already exists" -ForegroundColor Green
-    }
-} catch {
-    Write-Host "⚠️  Could not configure firewall. You may need to allow the binary manually." -ForegroundColor Yellow
-}
+# 5. Start Service
+Write-Host "Starting service..."
+Start-Service $ServiceName
 
-# ==========================================
-# 7. SUMMARY
-# ==========================================
-Write-Host "`n========================================" -ForegroundColor Cyan
-Write-Host "✅ INSTALLATION COMPLETE!" -ForegroundColor Green
-Write-Host "========================================" -ForegroundColor Cyan
-Write-Host ""
-Write-Host "Installation Details:" -ForegroundColor White
-Write-Host "  • Installation Directory: $InstallDir" -ForegroundColor Gray
-Write-Host "  • Service Name: $serviceName" -ForegroundColor Gray
-Write-Host "  • Agent Name: $AgentName" -ForegroundColor Gray
-Write-Host ""
-Write-Host "Useful Commands:" -ForegroundColor White
-Write-Host "  • Check status:  Get-Service -Name $serviceName" -ForegroundColor Gray
-Write-Host "  • Stop service:  Stop-Service -Name $serviceName" -ForegroundColor Gray
-Write-Host "  • Start service: Start-Service -Name $serviceName" -ForegroundColor Gray
-Write-Host "  • View logs:     Get-Content '$InstallDir\logs\stdout.log' -Tail 50" -ForegroundColor Gray
-Write-Host ""
-Write-Host "The agent should now appear in your Nexus dashboard!" -ForegroundColor Green
-Write-Host ""
+Write-Host "✅ Nexus Agent installed and started successfully!" -ForegroundColor Green

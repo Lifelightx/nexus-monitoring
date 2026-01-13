@@ -64,7 +64,20 @@ module.exports = (io, app) => {
 
     io.on('connection', (socket) => {
         const auth = socket.handshake.auth;
-        const agentName = auth.agentName;
+
+        // Attempt to fallback to query.auth if present (manual parsing)
+        if (!auth || Object.keys(auth).length === 0) {
+            if (socket.handshake.query && socket.handshake.query.auth) {
+                try {
+                    const parsedAuth = JSON.parse(socket.handshake.query.auth);
+                    Object.assign(socket.handshake.auth, parsedAuth);
+                } catch (e) {
+                    logger.error('Failed to parse auth from query:', e.message);
+                }
+            }
+        }
+
+        const agentName = socket.handshake.auth.agentName;
         const clientType = agentName ? `Agent(${agentName})` : 'Dashboard/UI';
 
         logger.info(`New Connection: ${clientType}`, { socketId: socket.id, ip: socket.handshake.address });

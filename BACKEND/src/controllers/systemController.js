@@ -63,6 +63,7 @@ exports.getDiskScan = async (req, res) => {
 };
 
 // List files in a directory (Live via Socket)
+// List files in a directory (Live via Socket or Queue)
 exports.listFiles = async (req, res) => {
     const { id } = req.params;
     const { path } = req.query;
@@ -72,56 +73,96 @@ exports.listFiles = async (req, res) => {
     }
 
     const agentSockets = req.app.get('agentSockets');
-    // agentSockets is Map<AgentName, SocketID>
-
-    let socketId = agentSockets.get(id);
-
-    if (!socketId) {
-        return res.status(404).json({ message: 'Agent not connected' });
-    }
-
+    const socketId = agentSockets ? agentSockets.get(id) : null;
     const io = req.app.get('io');
-    const socket = io.sockets.sockets.get(socketId);
-
-    if (!socket) {
-        return res.status(404).json({ message: 'Agent socket not found' });
-    }
+    const socket = (io && socketId) ? io.sockets.sockets.get(socketId) : null;
 
     const requestId = uuidv4();
 
-    // Set up a one-time listener for the result
-    const resultPromise = new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => {
-            cleanup();
-            reject(new Error('Scan timed out'));
-        }, 10000); // 10s timeout
-
-        const listener = (data) => {
-            if (data.requestId === requestId) {
+    // SOCKET.IO PATH
+    if (socket) {
+        const resultPromise = new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
                 cleanup();
-                resolve(data);
+                reject(new Error('Scan timed out'));
+            }, 10000);
+
+            const listener = (data) => {
+                if (data.requestId === requestId) {
+                    cleanup();
+                    resolve(data);
+                }
+            };
+
+            const cleanup = () => {
+                clearTimeout(timeout);
+                socket.off('system:fs:list:result', listener);
+            };
+
+            socket.on('system:fs:list:result', listener);
+        });
+
+        socket.emit('system:fs:list', { path, requestId });
+
+        try {
+            const result = await resultPromise;
+            if (result.success) {
+                return res.json({ success: true, files: result.files });
+            } else {
+                return res.status(500).json({ message: result.error || 'List failed' });
             }
-        };
+        } catch (error) {
+            return res.status(504).json({ message: error.message });
+        }
+    }
 
-        const cleanup = () => {
-            clearTimeout(timeout);
-            socket.off('system:fs:list:result', listener);
-        };
-
-        socket.on('system:fs:list:result', listener);
-    });
-
-    // Emit the command
-    socket.emit('system:fs:list', { path, requestId });
-
+    // COMMAND QUEUE PATH (Fallback for C++ Agent / Polling)
     try {
+        const CommandQueue = require('../models/CommandQueue');
+        const EventEmitter = require('events');
+        const eventBus = req.app.get('eventBus') || new EventEmitter();
+        req.app.set('eventBus', eventBus); // Ensure bus exists
+
+        // Create command
+        await CommandQueue.create({
+            agent: id,             // Fixed field name
+            type: 'file',          // Fixed type
+            action: 'list',        // Fixed action
+            params: { path, requestId },
+            status: 'pending'
+        });
+
+        // Wait for result
+        const resultPromise = new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                cleanup();
+                reject(new Error('Agent did not respond in time (Polling latency?)'));
+            }, 15000); // 15s timeout for polling
+
+            const listener = (data) => {
+                if (data.requestId === requestId) {
+                    cleanup();
+                    resolve(data);
+                }
+            };
+
+            const cleanup = () => {
+                clearTimeout(timeout);
+                eventBus.removeListener('command:result', listener);
+            };
+
+            eventBus.on('command:result', listener);
+        });
+
         const result = await resultPromise;
         if (result.success) {
-            res.json({ success: true, files: result.files });
+            return res.json({ success: true, files: result.files });
         } else {
-            res.status(500).json({ message: result.error || 'List failed' });
+            return res.status(500).json({ message: result.error || 'List failed' });
         }
+
     } catch (error) {
-        res.status(504).json({ message: error.message });
+        console.error('File list error:', error);
+        return res.status(500).json({ message: error.message || 'Failed to queue command' });
     }
 };

@@ -10,7 +10,8 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // MongoDB connection
-mongoose.connect('mongodb://localhost:27017/test-apm', {
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/test-apm';
+mongoose.connect(MONGO_URI, {
     useNewUrlParser: true,
     useUnifiedTopology: true
 }).then(() => {

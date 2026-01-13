@@ -64,31 +64,44 @@ const controlDockerContainer = async (req, res) => {
 
         // Get socket.io instance from app
         const io = req.app.get('io');
-        if (!io) {
-            return res.status(500).json({ message: 'Socket.IO not available' });
-        }
-
-        // Find the agent's socket connection
         const agentSockets = req.app.get('agentSockets') || new Map();
         const socketId = agentSockets.get(agentId.toString());
 
-        if (!socketId) {
-            return res.status(400).json({ message: 'Agent socket connection not found' });
+        if (socketId && io) {
+            // Online via Socket.IO (Legacy Node.js Agent)
+            io.to(socketId).emit('docker:control', {
+                action,
+                containerId,
+                payload
+            });
+            return res.json({
+                success: true,
+                message: `${action} command sent to agent via Socket.IO`,
+                agentId,
+                containerId,
+                action
+            });
         }
 
-        // Send control command to agent
-        io.to(socketId).emit('docker:control', {
-            action,
-            containerId,
-            payload
+        // Fallback: Queue command for polling (C++ Agent)
+        const CommandQueue = require('../models/CommandQueue');
+        const command = new CommandQueue({
+            agent: agentId,
+            type: 'docker',
+            action: action,
+            params: { containerId, ...payload },
+            status: 'pending'
         });
+        await command.save();
 
         res.json({
             success: true,
-            message: `${action} command sent to agent`,
+            message: `${action} command queued for agent`,
+            commandId: command._id,
             agentId,
             containerId,
-            action
+            action,
+            queued: true
         });
 
     } catch (error) {
