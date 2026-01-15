@@ -28,6 +28,28 @@ services:
     networks:
       - nexus-network
 
+  nexus-next-app:
+    container_name: next-app-container
+    build:
+      context: ./test-next-app
+      dockerfile: Dockerfile
+    ports:
+      - "3002:3000"
+    environment:
+      - MONGO_URI=mongodb://mongo:27017/test-apm-next
+      - SERVER_URL=http://host.docker.internal:3000
+      - SERVICE_NAME=next-app-container
+      - INSTRUMENT_NODEJS=true
+      # Runtime Agent Injection
+      - NODE_OPTIONS=--require /opt/nexus-agent/instrumentation/nodejs/index.js
+    volumes:
+      # Mount the agent from the host
+      - /opt/nexus-agent/instrumentation:/opt/nexus-agent/instrumentation:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - nexus-network
+
   mongo:
     image: mongo:6
     ports:
