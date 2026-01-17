@@ -164,7 +164,9 @@ router.get(/^\/files\/(.*)/, (req, res) => {
  */
 router.get('/instrumentation', (req, res) => {
     const { spawn } = require('child_process');
-    const assetDir = path.join(__dirname, '../../../agent/assets');
+    const assetDir = process.env.AGENT_ASSET_DIR
+        ? path.resolve(process.env.AGENT_ASSET_DIR)
+        : path.join(__dirname, '../../../agent/assets');
 
     res.setHeader('Content-Type', 'application/gzip');
     res.setHeader('Content-Disposition', 'attachment; filename="instrumentation.tar.gz"');

@@ -1,0 +1,41 @@
+file(REMOVE_RECURSE
+  "CMakeFiles/nexus-agent.dir/src/collectors/docker_monitor.cpp.o"
+  "CMakeFiles/nexus-agent.dir/src/collectors/docker_monitor.cpp.o.d"
+  "CMakeFiles/nexus-agent.dir/src/collectors/process_scanner.cpp.o"
+  "CMakeFiles/nexus-agent.dir/src/collectors/process_scanner.cpp.o.d"
+  "CMakeFiles/nexus-agent.dir/src/collectors/security_collector.cpp.o"
+  "CMakeFiles/nexus-agent.dir/src/collectors/security_collector.cpp.o.d"
+  "CMakeFiles/nexus-agent.dir/src/collectors/system_metrics.cpp.o"
+  "CMakeFiles/nexus-agent.dir/src/collectors/system_metrics.cpp.o.d"
+  "CMakeFiles/nexus-agent.dir/src/communication/http_agent_client.cpp.o"
+  "CMakeFiles/nexus-agent.dir/src/communication/http_agent_client.cpp.o.d"
+  "CMakeFiles/nexus-agent.dir/src/communication/http_client.cpp.o"
+  "CMakeFiles/nexus-agent.dir/src/communication/http_client.cpp.o.d"
+  "CMakeFiles/nexus-agent.dir/src/communication/websocket_client.cpp.o"
+  "CMakeFiles/nexus-agent.dir/src/communication/websocket_client.cpp.o.d"
+  "CMakeFiles/nexus-agent.dir/src/detectors/service_detector.cpp.o"
+  "CMakeFiles/nexus-agent.dir/src/detectors/service_detector.cpp.o.d"
+  "CMakeFiles/nexus-agent.dir/src/handlers/command_handler.cpp.o"
+  "CMakeFiles/nexus-agent.dir/src/handlers/command_handler.cpp.o.d"
+  "CMakeFiles/nexus-agent.dir/src/handlers/docker_handler.cpp.o"
+  "CMakeFiles/nexus-agent.dir/src/handlers/docker_handler.cpp.o.d"
+  "CMakeFiles/nexus-agent.dir/src/handlers/file_handler.cpp.o"
+  "CMakeFiles/nexus-agent.dir/src/handlers/file_handler.cpp.o.d"
+  "CMakeFiles/nexus-agent.dir/src/main.cpp.o"
+  "CMakeFiles/nexus-agent.dir/src/main.cpp.o.d"
+  "CMakeFiles/nexus-agent.dir/src/orchestrator/injector.cpp.o"
+  "CMakeFiles/nexus-agent.dir/src/orchestrator/injector.cpp.o.d"
+  "CMakeFiles/nexus-agent.dir/src/orchestrator/instrumentation_manager.cpp.o"
+  "CMakeFiles/nexus-agent.dir/src/orchestrator/instrumentation_manager.cpp.o.d"
+  "CMakeFiles/nexus-agent.dir/src/utils/config.cpp.o"
+  "CMakeFiles/nexus-agent.dir/src/utils/config.cpp.o.d"
+  "CMakeFiles/nexus-agent.dir/src/utils/logger.cpp.o"
+  "CMakeFiles/nexus-agent.dir/src/utils/logger.cpp.o.d"
+  "nexus-agent"
+  "nexus-agent.pdb"
+)
+
+# Per-language clean rules from dependency scanning.
+foreach(lang CXX)
+  include(CMakeFiles/nexus-agent.dir/cmake_clean_${lang}.cmake OPTIONAL)
+endforeach()

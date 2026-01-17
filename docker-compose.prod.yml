@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  nexus-mongo:
+    image: mongo:6
+    container_name: nexus-mongo
+    restart: always
+    environment:
+      - MONGO_INITDB_DATABASE=nexus-monitor
+    volumes:
+      - nexus_mongo_data:/data/db
+    networks:
+      - nexus-network
+
+  nexus-backend:
+    container_name: nexus-backend
+    build:
+      context: .
+      dockerfile: BACKEND/Dockerfile
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - MONGO_URI=mongodb://nexus-mongo:27017/nexus-monitor
+      - JWT_SECRET=${JWT_SECRET:-nxUeS@ge6^7%394JnOmJeebanHRt}
+      - NODE_ENV=production
+      - AGENT_TOKEN_EXPIRY=30d
+      # Internal paths in the container
+      - AGENT_DIST_DIR=/app/agent/build
+      - AGENT_ASSET_DIR=/app/agent/assets
+    depends_on:
+      - nexus-mongo
+    networks:
+      - nexus-network
+
+  nexus-frontend:
+    container_name: nexus-frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - nexus-backend
+    networks:
+      - nexus-network
+
+networks:
+  nexus-network:
+    driver: bridge
+
+volumes:
+  nexus_mongo_data:
