@@ -19,12 +19,17 @@ std::vector<DetectedService> detectServices(
             continue;
         }
         
-        // Detect service type
-        std::string type = detectServiceType(proc.name, proc.cmdline);
-        if (type == "Unknown") continue;  // Skip unknown services
+        Logger::getInstance().debug("Found process with ports: {} [PID {}] - Ports: {}", 
+            proc.name, proc.pid, proc.ports.size());
         
-        // Extract service name
+        // Detect service type (use process name as fallback)
+        std::string type = detectServiceType(proc.name, proc.cmdline);
+        
+        // Extract service name from command line or use process name
         std::string name = extractServiceName(proc.cmdline);
+        if (name.empty()) {
+            name = proc.name;  // Fallback to process name
+        }
         
         DetectedService service;
         service.name = name;
@@ -111,7 +116,9 @@ std::string detectServiceType(const std::string& processName, const std::string&
         return "MongoDB";
     }
     
-    return "Unknown";
+    // Return process name as type (not "Unknown")
+    // This ensures Chrome, Antigravity, etc. are detected
+    return processName;
 }
 
 std::string extractServiceName(const std::string& cmdline) {

@@ -68,12 +68,38 @@ inline json serializeSystemMetrics(const nexus::collectors::SystemMetrics& metri
     };
 }
 
+// Serialize processes array for backend storage
+inline json serializeProcesses(const std::vector<collectors::ProcessInfo>& processes) {
+    json result = json::array();
+    for (const auto& proc : processes) {
+        json ports_json = json::array();
+        for (int port : proc.ports) {
+            ports_json.push_back({
+                {"port", port},
+                {"protocol", "tcp"}
+            });
+        }
+        
+        result.push_back({
+            {"pid", proc.pid},
+            {"name", proc.name},
+            {"command", proc.cmdline},
+            {"cpu", proc.cpu_percent},
+            {"memory", proc.memory_bytes},
+            {"ports", ports_json}
+        });
+    }
+    return result;
+}
+
 // Serialize Docker data to JSON
 inline json serializeDockerData(const nexus::collectors::DockerMonitor& docker) {
-    const auto& containers = docker.getContainers();
-    const auto& images = docker.getImages();
-    const auto& info = docker.getInfo();
-    
+    // Sort containers by name
+    auto containers = docker.getContainers();
+    std::sort(containers.begin(), containers.end(), [](const auto& a, const auto& b) {
+        return a.name < b.name;
+    });
+
     json containers_json = json::array();
     for (const auto& container : containers) {
         json ports_json = json::array();
@@ -100,6 +126,12 @@ inline json serializeDockerData(const nexus::collectors::DockerMonitor& docker) 
         });
     }
     
+    // Sort images by creation time (newest first)
+    auto images = docker.getImages();
+    std::sort(images.begin(), images.end(), [](const auto& a, const auto& b) {
+        return a.created > b.created;
+    });
+
     json images_json = json::array();
     for (const auto& image : images) {
         images_json.push_back({
@@ -125,7 +157,12 @@ inline json serializeDockerData(const nexus::collectors::DockerMonitor& docker) 
         });
     }
 
-    const auto& volumes = docker.getVolumes();
+    // Sort volumes by name
+    auto volumes = docker.getVolumes();
+    std::sort(volumes.begin(), volumes.end(), [](const auto& a, const auto& b) {
+        return a.name < b.name;
+    });
+
     json volumes_json = json::array();
     for (const auto& vol : volumes) {
         volumes_json.push_back({
@@ -135,7 +172,12 @@ inline json serializeDockerData(const nexus::collectors::DockerMonitor& docker) 
         });
     }
 
-    const auto& networks = docker.getNetworks();
+    // Sort networks by name
+    auto networks = docker.getNetworks();
+    std::sort(networks.begin(), networks.end(), [](const auto& a, const auto& b) {
+        return a.name < b.name;
+    });
+
     json networks_json = json::array();
     for (const auto& net : networks) {
         networks_json.push_back({
@@ -147,6 +189,8 @@ inline json serializeDockerData(const nexus::collectors::DockerMonitor& docker) 
         });
     }
     
+    const auto& info = docker.getInfo();
+
     return {
         {"containers", containers_json},
         {"images", images_json},
@@ -155,6 +199,7 @@ inline json serializeDockerData(const nexus::collectors::DockerMonitor& docker) 
         {"info", {
             {"containers", info.containers},
             {"containersRunning", info.containers_running},
+            {"containersStopped", info.containers_stopped},
             {"images", info.images}
         }}
     };

@@ -75,6 +75,14 @@ const serviceSchema = new mongoose.Schema({
             default: 0
         }
     },
+    instrumentable: {
+        type: Boolean,
+        default: false
+    },
+    hasActiveTraces: {
+        type: Boolean,
+        default: false
+    },
     detectedAt: {
         type: Date,
         default: Date.now

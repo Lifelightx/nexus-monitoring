@@ -1,57 +1,118 @@
-version: '3.8'
 
 services:
-  nexus-test-app:
-    container_name: test-app-container
-    build:
-      context: .
-      dockerfile: test-app/Dockerfile
+  # ============================================
+  # TELEMETRY INFRASTRUCTURE
+  # ============================================
+  
+  # Redpanda - Kafka-compatible message broker
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v24.3.1
+    container_name: redpanda
+    command:
+      - redpanda
+      - start
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda:9092,external://localhost:30092
+      - --pandaproxy-addr internal://0.0.0.0:8082,external://0.0.0.0:18082
+      - --advertise-pandaproxy-addr internal://redpanda:8082,external://localhost:30082
+      - --schema-registry-addr internal://0.0.0.0:8081,external://0.0.0.0:18081
+      - --rpc-addr redpanda:33145
+      - --advertise-rpc-addr redpanda:33145
+      - --mode dev-container
+      - --smp 1
+      - --default-log-level=info
     ports:
-      - "3001:3001"
-    environment:
-      - MONGO_URI=mongodb://mongo:27017/test-apm
-      # Backend URL needed for agent to send data
-      - SERVER_URL=http://host.docker.internal:3000
-      - SERVICE_NAME=test-app-container
-      - INSTRUMENT_NODEJS=true
-      - AGENT_TOKEN=your-agent-token
-      # Runtime Agent Injection
-      - NODE_OPTIONS=--require /opt/nexus-agent/instrumentation/nodejs/index.js
+      - "30092:19092"  # Kafka API (external)
+      - "30081:18081"  # Schema Registry (external)
+      - "30082:18082"  # Pandaproxy (external)
+      - "30644:9644"    # Admin API
+    restart: unless-stopped
     volumes:
-      # Mount the agent from the host
-      - /opt/nexus-agent/instrumentation:/opt/nexus-agent/instrumentation:ro
+      - redpanda_data:/var/lib/redpanda/data
+    networks:
+      - nexus-network
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.+true' || exit 1"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  # ClickHouse - Traces & Logs Database
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.1-alpine
+    container_name: clickhouse
+    ports:
+      - "30123:8123"  # HTTP
+      - "30900:9000"  # Native
+    environment:
+      CLICKHOUSE_DB: otel
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: ""
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - ./BACKEND/config/clickhouse-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - nexus-network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "localhost:8123/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # VictoriaMetrics - Metrics Time-Series Database
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:v1.97.1
+    container_name: victoriametrics
+    ports:
+      - "30428:8428"  # HTTP API
+    command:
+      - "--storageDataPath=/storage"
+      - "--httpListenAddr=:8428"
+      - "--retentionPeriod=12"  # 12 months retention
+    volumes:
+      - victoria_data:/storage
+    networks:
+      - nexus-network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "localhost:8428/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # OpenTelemetry Collector - Telemetry Pipeline
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.93.0
+    container_name: otel-collector
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    ports:
+      - "30317:4317"   # OTLP gRPC receiver
+      - "30318:4318"   # OTLP HTTP receiver
+      - "30888:8888"   # Prometheus metrics (collector self-monitoring)
+      - "30133:13133" # Health check
+    volumes:
+      - ./BACKEND/config/otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
     depends_on:
-      - mongo
-    extra_hosts:
-      # Allow container to access host localhost
-      - "host.docker.internal:host-gateway"
+      - redpanda
+      - clickhouse
+      - victoriametrics
     networks:
       - nexus-network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "localhost:13133"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  nexus-next-app:
-    container_name: next-app-container
-    build:
-      context: ./test-next-app
-      dockerfile: Dockerfile
-    ports:
-      - "3002:3000"
-    environment:
-      - MONGO_URI=mongodb://mongo:27017/test-apm-next
-      - SERVER_URL=http://host.docker.internal:3000
-      - SERVICE_NAME=next-app-container
-      - INSTRUMENT_NODEJS=true
-      # Runtime Agent Injection
-      - NODE_OPTIONS=--require /opt/nexus-agent/instrumentation/nodejs/index.js
-    volumes:
-      # Mount the agent from the host
-      - /opt/nexus-agent/instrumentation:/opt/nexus-agent/instrumentation:ro
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    networks:
-      - nexus-network
+  # ============================================
+  # APPLICATION SERVICES
+  # ============================================
 
+  # MongoDB - Legacy data store (for existing services)
   mongo:
-    image: mongo:6
+    image: mongo:latest
+    container_name: mongo
     ports:
       - "27018:27017"
     volumes:
@@ -59,9 +120,38 @@ services:
     networks:
       - nexus-network
 
+  # Backend - Node.js API with OTLP Ingest
+  # backend:
+  #   build:
+  #     context: ./BACKEND
+  #     dockerfile: Dockerfile
+  #   container_name: nexus-backend
+  #   ports:
+  #     - "3000:3000"
+  #   environment:
+  #     - PORT=3000
+  #     - SERVER_HOST=0.0.0.0
+  #     - JWT_SECRET=nxUeS@ge6^7%394JnOmJeebanHRt
+  #     - MONGO_URI=mongodb://mongo:27017/nexus-monitor
+  #     - KAFKA_BROKERS=redpanda:9092
+  #     - AGENT_TOKEN_EXPIRY=30d
+  #     - KAFKA_TOPIC_TRACES=otel_traces
+  #     - KAFKA_TOPIC_METRICS=otel_metrics
+  #     - KAFKA_TOPIC_LOGS=otel_logs
+  #   depends_on:
+  #     - mongo
+  #     - redpanda
+  #     - otel-collector
+  #   networks:
+  #     - nexus-network
+  #   restart: unless-stopped
+
 networks:
   nexus-network:
     driver: bridge
 
 volumes:
+  redpanda_data:
+  clickhouse_data:
+  victoria_data:
   mongo_data:

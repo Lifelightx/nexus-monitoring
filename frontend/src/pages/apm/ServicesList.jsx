@@ -1,301 +1,277 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { useNavigate, useParams, useOutletContext } from 'react-router-dom';
-import { mockServices, getServicesByHost } from '../../mockData/services';
-import { getAgentServices } from '../../services/apmService';
-import HealthIndicator from '../../components/shared/HealthIndicator';
-import MetricSparkline from '../../components/shared/MetricSparkline';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import { useNavigate, useParams } from 'react-router-dom';
+import { Activity, CheckCircle, AlertCircle, Circle, Play, TrendingUp, AlertTriangle, Clock, Zap, ChevronDown, ChevronRight } from 'lucide-react';
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 const ServicesList = () => {
     const navigate = useNavigate();
-    const { id: hostId } = useParams(); // Get host ID from URL
-    const context = useOutletContext(); // Get context from ServerLayout
-    const [sortBy, setSortBy] = useState('health');
-    const [sortOrder, setSortOrder] = useState('desc');
-    const [searchTerm, setSearchTerm] = useState('');
+    const { id } = useParams();
     const [services, setServices] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
+    const [expandedCategories, setExpandedCategories] = useState({
+        instrumented: true,
+        instrumentable: true,
+        container: true,
+        system: false  // Collapsed by default
+    });
 
-    // Fetch services from API
+    const isServerContext = !!id;
+
     useEffect(() => {
-        const fetchServices = async () => {
-            if (!hostId) {
-                console.log('⚠️ No hostId provided, skipping service fetch');
-                setLoading(false);
-                return;
-            }
-
-            try {
-                setLoading(true);
-                setError(null);
-                console.log('🔍 Fetching services for host:', hostId);
-                const data = await getAgentServices(hostId);
-                console.log('✅ Services fetched successfully:', data);
-                setServices(data);
-            } catch (err) {
-                console.error('❌ Error fetching services:', err);
-                console.error('Error details:', {
-                    message: err.message,
-                    response: err.response?.data,
-                    status: err.response?.status
-                });
-                setError('Failed to load services');
-                // Fallback to mock data
-                console.log('📦 Falling back to mock data');
-                setServices(getServicesByHost(hostId));
-            } finally {
-                setLoading(false);
-            }
-        };
-
         fetchServices();
-    }, [hostId]);
+        const interval = setInterval(fetchServices, 30000);
+        return () => clearInterval(interval);
+    }, [id]);
 
-    // Generate sparkline data for each service
-    const generateSparklineData = () => {
-        return Array.from({ length: 20 }, () => Math.random() * 100);
-    };
+    const fetchServices = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            const endpoint = isServerContext
+                ? `${API_BASE_URL}/api/agents/${id}/services`
+                : `${API_BASE_URL}/api/otel/services`;
 
-    // Filter and sort services
-    const filteredServices = useMemo(() => {
-        console.log('🔄 Filtering services:', services);
+            const response = await axios.get(endpoint, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
 
-        let filtered = services.filter(service =>
-            service.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            service.type?.toLowerCase().includes(searchTerm.toLowerCase())
-        );
-
-        console.log('✅ Filtered services:', filtered.length);
-
-        // Sort services
-        filtered.sort((a, b) => {
-            let comparison = 0;
-
-            switch (sortBy) {
-                case 'name':
-                    comparison = (a.name || '').localeCompare(b.name || '');
-                    break;
-                case 'requests':
-                    comparison = (a.metrics?.requestsPerMin || 0) - (b.metrics?.requestsPerMin || 0);
-                    break;
-                case 'latency':
-                    comparison = (a.metrics?.p95Latency || 0) - (b.metrics?.p95Latency || 0);
-                    break;
-                case 'errors':
-                    comparison = (a.metrics?.errorRate || 0) - (b.metrics?.errorRate || 0);
-                    break;
-                case 'health':
-                    const healthOrder = { critical: 3, warning: 2, healthy: 1, unknown: 0 };
-                    comparison = (healthOrder[a.health] || 0) - (healthOrder[b.health] || 0);
-                    break;
-                default:
-                    comparison = 0;
+            if (isServerContext) {
+                setServices(response.data || []);
+            } else {
+                if (response.data.success) {
+                    const data = response.data.data.map(s => ({
+                        ...s,
+                        name: s.name || s.service_name || s.ServiceName || 'Unknown'
+                    }));
+                    setServices(data);
+                }
             }
-
-            return sortOrder === 'asc' ? comparison : -comparison;
-        });
-
-        return filtered;
-    }, [services, searchTerm, sortBy, sortOrder]);
-
-    const handleSort = (column) => {
-        if (sortBy === column) {
-            setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-        } else {
-            setSortBy(column);
-            setSortOrder('desc');
+        } catch (error) {
+            console.error("Failed to fetch services:", error);
+        } finally {
+            setLoading(false);
         }
     };
 
-    const getSortIcon = (column) => {
-        if (sortBy !== column) return 'fa-sort';
-        return sortOrder === 'asc' ? 'fa-sort-up' : 'fa-sort-down';
+    // Categorize services dynamically
+    const categorizedServices = {
+        instrumented: services.filter(s => s.instrumentable && s.hasActiveTraces),
+        instrumentable: services.filter(s => s.instrumentable && !s.hasActiveTraces),
+        container: services.filter(s => !s.instrumentable && s.containerId),
+        system: services.filter(s => !s.instrumentable && !s.containerId)
     };
 
-    // Calculate summary stats
-    const stats = {
-        total: services.length,
-        healthy: services.filter(s => s.health === 'healthy').length,
-        warning: services.filter(s => s.health === 'warning').length,
-        critical: services.filter(s => s.health === 'critical').length,
-        totalRequests: services.reduce((sum, s) => sum + (s.metrics?.requestsPerMin || 0), 0)
+    const toggleCategory = (category) => {
+        setExpandedCategories(prev => ({
+            ...prev,
+            [category]: !prev[category]
+        }));
+    };
+
+    const handleServiceClick = (service) => {
+        if (isServerContext) {
+            navigate(`/server/${id}/services/${service.name}`);
+        } else {
+            navigate(`/apm/services/${service.name}`);
+        }
+    };
+
+    const handleTracesClick = (e, service) => {
+        e.stopPropagation();
+        if (isServerContext) {
+            navigate(`/server/${id}/traces/${service.name}`);
+        } else {
+            navigate(`/apm/traces?service=${service.name}`);
+        }
+    };
+
+    const renderServiceRow = (service, index) => (
+        <tr
+            key={index}
+            onClick={() => handleServiceClick(service)}
+            className="hover:bg-white/5 transition-colors cursor-pointer"
+        >
+            <td className="p-4">
+                <div className="flex items-center gap-3">
+                    <div className="p-2 bg-blue-500/10 rounded text-blue-400">
+                        <Activity size={16} />
+                    </div>
+                    <div>
+                        <div className="font-semibold text-text-primary">{service.name}</div>
+                        <div className="text-xs mt-0.5 text-text-secondary capitalize">{service.type || 'Unknown'}</div>
+                    </div>
+                </div>
+            </td>
+            <td className="p-4">
+                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${service.status === 'running'
+                        ? 'bg-green-500/10 text-green-400'
+                        : 'bg-red-500/10 text-red-400'
+                    }`}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-current"></span>
+                    {service.status || 'Running'}
+                </span>
+            </td>
+            <td className="p-4 text-center">
+                <span className="text-text-primary font-medium">
+                    {service.metrics?.requestsPerMin || service.rps || 0}
+                </span>
+                <span className="text-xs text-text-secondary ml-1">req/s</span>
+            </td>
+            <td className="p-4 text-center">
+                <span className={`font-medium ${(service.metrics?.errorRate || service.errorRate || 0) > 5
+                        ? 'text-red-400'
+                        : 'text-green-400'
+                    }`}>
+                    {(service.metrics?.errorRate || service.errorRate || 0).toFixed(2)}%
+                </span>
+            </td>
+            <td className="p-4 text-center">
+                <span className="text-text-primary font-medium">
+                    {service.metrics?.p95Latency || service.p95Latency || 0}
+                </span>
+                <span className="text-xs text-text-secondary ml-1">ms</span>
+            </td>
+            <td className="p-4 text-center">
+                <span className="text-text-primary font-medium">
+                    {service.metrics?.throughput || service.throughput || 0}
+                </span>
+                <span className="text-xs text-text-secondary ml-1">ops/s</span>
+            </td>
+            <td className="p-4 text-center">
+                <span className="text-sm text-text-secondary font-mono">{service.port}</span>
+            </td>
+            <td className="p-4">
+                <div className="flex items-center justify-center gap-2">
+                    {service.instrumentable && service.hasActiveTraces ? (
+                        <button
+                            onClick={(e) => handleTracesClick(e, service)}
+                            className="px-3 py-1.5 bg-accent-color/10 hover:bg-accent-color/20 text-accent-color rounded text-sm font-medium flex items-center gap-1.5 transition-colors"
+                        >
+                            <Play size={12} />
+                            Traces
+                        </button>
+                    ) : service.instrumentable && !service.hasActiveTraces ? (
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                console.log('Setup instrumentation for', service.name);
+                            }}
+                            className="px-3 py-1.5 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 rounded text-sm font-medium flex items-center gap-1.5 transition-colors"
+                        >
+                            <AlertCircle size={12} />
+                            Setup
+                        </button>
+                    ) : (
+                        <span className="text-xs text-text-secondary">N/A</span>
+                    )}
+                </div>
+            </td>
+        </tr>
+    );
+
+    const renderCategory = (title, icon, category, services, priority) => {
+        if (services.length === 0) return null;
+
+        const isExpanded = expandedCategories[category];
+        const priorityColors = {
+            high: 'text-green-400 border-green-400/30',
+            medium: 'text-yellow-400 border-yellow-400/30',
+            low: 'text-blue-400 border-blue-400/30'
+        };
+
+        return (
+            <div className="mb-6">
+                <div
+                    onClick={() => toggleCategory(category)}
+                    className={`flex items-center justify-between p-4 bg-card-bg border ${priorityColors[priority]} rounded-t-lg cursor-pointer hover:bg-white/5 transition-colors`}
+                >
+                    <div className="flex items-center gap-3">
+                        <span className="text-2xl">{icon}</span>
+                        <h2 className="text-lg font-bold text-text-primary">
+                            {title}
+                            <span className="ml-2 text-sm font-normal text-text-secondary">({services.length})</span>
+                        </h2>
+                    </div>
+                    {isExpanded ? <ChevronDown size={20} className="text-text-secondary" /> : <ChevronRight size={20} className="text-text-secondary" />}
+                </div>
+
+                {isExpanded && (
+                    <div className="bg-card-bg border border-white/10 border-t-0 rounded-b-lg overflow-hidden">
+                        <table className="w-full">
+                            <thead className="bg-white/5 border-b border-white/10">
+                                <tr>
+                                    <th className="text-left p-4 text-sm font-semibold text-text-secondary">Service Name</th>
+                                    <th className="text-left p-4 text-sm font-semibold text-text-secondary">Status</th>
+                                    <th className="text-center p-4 text-sm font-semibold text-text-secondary">
+                                        <div className="flex items-center justify-center gap-1">
+                                            <TrendingUp size={14} />
+                                            RPS
+                                        </div>
+                                    </th>
+                                    <th className="text-center p-4 text-sm font-semibold text-text-secondary">
+                                        <div className="flex items-center justify-center gap-1">
+                                            <AlertTriangle size={14} />
+                                            Error Rate
+                                        </div>
+                                    </th>
+                                    <th className="text-center p-4 text-sm font-semibold text-text-secondary">
+                                        <div className="flex items-center justify-center gap-1">
+                                            <Clock size={14} />
+                                            P95 Latency
+                                        </div>
+                                    </th>
+                                    <th className="text-center p-4 text-sm font-semibold text-text-secondary">
+                                        <div className="flex items-center justify-center gap-1">
+                                            <Zap size={14} />
+                                            Throughput
+                                        </div>
+                                    </th>
+                                    <th className="text-center p-4 text-sm font-semibold text-text-secondary">Port</th>
+                                    <th className="text-center p-4 text-sm font-semibold text-text-secondary">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-white/10">
+                                {services.map((service, index) => renderServiceRow(service, index))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </div>
+        );
     };
 
     return (
-        <div>
-            {/* Header */}
-            <div className="flex justify-between items-center mb-6">
-                <div>
-                    <h2 className="text-2xl font-bold text-white">Services</h2>
-                    <p className="text-text-secondary mt-1">
-                        {hostId ? `Services running on this host (${services.length})` : 'Monitor all discovered services and their performance'}
-                    </p>
-                    {error && (
-                        <p className="text-red-400 text-sm mt-1">⚠️ {error} - Showing mock data</p>
-                    )}
-                </div>
-            </div>
+        <div className="p-6 h-full overflow-y-auto">
+            <h1 className="text-2xl font-bold text-text-primary mb-6 flex items-center gap-2">
+                <Activity className="text-accent-color" />
+                {isServerContext ? 'Services & Processes' : 'Application Performance Monitoring'}
+            </h1>
 
-            {/* Loading State */}
-            {loading && (
-                <div className="flex items-center justify-center py-12">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-accent"></div>
-                    <p className="ml-4 text-text-secondary">Loading services...</p>
+            {loading ? (
+                <div className="flex items-center justify-center p-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent-color"></div>
+                    <span className="ml-3 text-text-secondary">Loading services...</span>
                 </div>
+            ) : (
+                <>
+                    {renderCategory('Instrumented Services', '', 'instrumented', categorizedServices.instrumented, 'high')}
+                    {renderCategory('Needs Instrumentation', '', 'instrumentable', categorizedServices.instrumentable, 'medium')}
+                    {renderCategory('Container Services', '', 'container', categorizedServices.container, 'low')}
+                    {renderCategory('System Processes', '', 'system', categorizedServices.system, 'low')}
+                </>
             )}
 
-            {/* Content - only show if not loading */}
-            {!loading && (
-                <>
-                    {/* Stats Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
-                        <div className="bg-bg-secondary/50 backdrop-blur-sm p-4 rounded-xl border border-white/5">
-                            <p className="text-text-secondary text-xs uppercase tracking-wider mb-1">Total Services</p>
-                            <p className="text-2xl font-bold text-white">{stats.total}</p>
-                        </div>
-                        <div className="bg-bg-secondary/50 backdrop-blur-sm p-4 rounded-xl border border-white/5 border-l-4 border-l-green-500">
-                            <p className="text-text-secondary text-xs uppercase tracking-wider mb-1">Healthy</p>
-                            <p className="text-2xl font-bold text-green-400">{stats.healthy}</p>
-                        </div>
-                        <div className="bg-bg-secondary/50 backdrop-blur-sm p-4 rounded-xl border border-white/5 border-l-4 border-l-yellow-500">
-                            <p className="text-text-secondary text-xs uppercase tracking-wider mb-1">Warning</p>
-                            <p className="text-2xl font-bold text-yellow-400">{stats.warning}</p>
-                        </div>
-                        <div className="bg-bg-secondary/50 backdrop-blur-sm p-4 rounded-xl border border-white/5 border-l-4 border-l-red-500">
-                            <p className="text-text-secondary text-xs uppercase tracking-wider mb-1">Critical</p>
-                            <p className="text-2xl font-bold text-red-400">{stats.critical}</p>
-                        </div>
-                        <div className="bg-bg-secondary/50 backdrop-blur-sm p-4 rounded-xl border border-white/5">
-                            <p className="text-text-secondary text-xs uppercase tracking-wider mb-1">Total Req/min</p>
-                            <p className="text-2xl font-bold text-white">{stats.totalRequests.toLocaleString()}</p>
-                        </div>
-                    </div>
-
-                    {/* Search Bar */}
-                    <div className="mb-6">
-                        <div className="relative">
-                            <i className="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-text-secondary"></i>
-                            <input
-                                type="text"
-                                placeholder="Search services..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full pl-12 pr-4 py-3 bg-bg-secondary/50 border border-white/10 rounded-xl text-white placeholder-text-secondary focus:outline-none focus:border-accent transition-colors"
-                            />
-                        </div>
-                    </div>
-
-                    {/* Services Table */}
-                    <div className="bg-bg-secondary/50 backdrop-blur-sm rounded-xl border border-white/5 overflow-hidden">
-                        <div className="overflow-x-auto">
-                            <table className="w-full">
-                                <thead>
-                                    <tr className="text-text-secondary text-xs uppercase tracking-wider border-b border-white/10">
-                                        <th className="p-4 text-left font-medium cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('name')}>
-                                            <div className="flex items-center gap-2">
-                                                Service
-                                                <i className={`fas ${getSortIcon('name')} text-xs`}></i>
-                                            </div>
-                                        </th>
-                                        <th className="p-4 text-left font-medium">Type</th>
-                                        <th className="p-4 text-right font-medium cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('requests')}>
-                                            <div className="flex items-center justify-end gap-2">
-                                                Req/min
-                                                <i className={`fas ${getSortIcon('requests')} text-xs`}></i>
-                                            </div>
-                                        </th>
-                                        <th className="p-4 text-right font-medium cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('latency')}>
-                                            <div className="flex items-center justify-end gap-2">
-                                                P95 Latency
-                                                <i className={`fas ${getSortIcon('latency')} text-xs`}></i>
-                                            </div>
-                                        </th>
-                                        <th className="p-4 text-right font-medium cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('errors')}>
-                                            <div className="flex items-center justify-end gap-2">
-                                                Error Rate
-                                                <i className={`fas ${getSortIcon('errors')} text-xs`}></i>
-                                            </div>
-                                        </th>
-                                        <th className="p-4 text-left font-medium">Trend</th>
-                                        <th className="p-4 text-left font-medium cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('health')}>
-                                            <div className="flex items-center gap-2">
-                                                Health
-                                                <i className={`fas ${getSortIcon('health')} text-xs`}></i>
-                                            </div>
-                                        </th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {filteredServices.map((service, index) => (
-                                        <tr
-                                            key={service._id || `${service.port}-${service.name}` || index}
-                                            onClick={() => navigate(hostId ? `/server/${hostId}/services/${service.name}` : `/services/${service.name}`)}
-                                            className="border-b border-white/5 hover:bg-white/5 transition-colors cursor-pointer group"
-                                        >
-                                            <td className="p-4">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-sky-500/20 to-purple-500/20 flex items-center justify-center border border-white/10 group-hover:scale-110 transition-transform">
-                                                        <i className="fas fa-cube text-sky-400"></i>
-                                                    </div>
-                                                    <div>
-                                                        <p className="font-medium text-white group-hover:text-accent transition-colors">{service.name}</p>
-                                                        <p className="text-xs text-text-secondary">
-                                                            {service.containerName ? `📦 ${service.containerName}` : '💻 Host Process'} • Port {service.port}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td className="p-4">
-                                                <span className="px-2 py-1 rounded text-xs font-medium bg-purple-500/10 text-purple-400 border border-purple-500/20">
-                                                    {service.type}
-                                                </span>
-                                            </td>
-                                            <td className="p-4 text-right">
-                                                <p className="font-medium text-white">{service.metrics?.requestsPerMin || 0}</p>
-                                                <p className="text-xs text-text-secondary">{((service.metrics?.requestsPerMin || 0) / 60).toFixed(1)} req/s</p>
-                                            </td>
-                                            <td className="p-4 text-right">
-                                                <p className={`font-medium ${(service.metrics?.p95Latency || 0) > 800 ? 'text-red-400' :
-                                                    (service.metrics?.p95Latency || 0) > 500 ? 'text-yellow-400' :
-                                                        'text-green-400'
-                                                    }`}>
-                                                    {service.metrics?.p95Latency || 0}ms
-                                                </p>
-                                            </td>
-                                            <td className="p-4 text-right">
-                                                <p className={`font-medium ${(service.metrics?.errorRate || 0) > 1 ? 'text-red-400' :
-                                                    (service.metrics?.errorRate || 0) > 0.5 ? 'text-yellow-400' :
-                                                        'text-green-400'
-                                                    }`}>
-                                                    {service.metrics?.errorRate || 0}%
-                                                </p>
-                                            </td>
-                                            <td className="p-4">
-                                                <div className="w-24">
-                                                    <MetricSparkline
-                                                        data={generateSparklineData()}
-                                                        color={service.health === 'critical' ? '#f87171' : service.health === 'warning' ? '#fbbf24' : '#4ade80'}
-                                                        height={30}
-                                                    />
-                                                </div>
-                                            </td>
-                                            <td className="p-4">
-                                                <HealthIndicator health={service.health} />
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-
-                        {filteredServices.length === 0 && (
-                            <div className="text-center py-12">
-                                <i className="fas fa-search text-4xl text-text-secondary mb-3 opacity-30"></i>
-                                <p className="text-text-secondary">No services found matching "{searchTerm}"</p>
-                            </div>
-                        )}
-                    </div>
-                </>
+            {services.length === 0 && !loading && (
+                <div className="text-center py-20 bg-card-bg border border-white/10 rounded-lg">
+                    <Activity size={48} className="mx-auto text-text-secondary mb-4 opacity-50" />
+                    <h3 className="text-xl font-bold text-text-primary mb-2">No Services Found</h3>
+                    <p className="text-text-secondary max-w-md mx-auto">
+                        {isServerContext
+                            ? 'No services detected on this server. Services will appear when applications with listening ports are running.'
+                            : 'Waiting for traces... Ensure your applications are instrumented with OpenTelemetry and sending data to the collector.'}
+                    </p>
+                </div>
             )}
         </div>
     );

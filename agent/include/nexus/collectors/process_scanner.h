@@ -2,6 +2,7 @@
 
 #include <string>
 #include <vector>
+#include <map>
 #include <cstdint>
 
 namespace nexus {
@@ -33,7 +34,7 @@ public:
     std::vector<ProcessInfo> findByPort(int port) const;
 
 private:
-    bool scanProcess(int pid);
+    bool scanProcess(int pid, const std::map<int, std::vector<int>>& portMap);
     bool getProcessPorts(int pid, std::vector<int>& ports);
     
     std::vector<ProcessInfo> processes_;

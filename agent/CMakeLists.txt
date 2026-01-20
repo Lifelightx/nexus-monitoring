@@ -38,12 +38,15 @@ set(SOURCES
     src/orchestrator/injector.cpp
     src/utils/logger.cpp
     src/utils/config.cpp
+    src/utils/otlp_converter.cpp
     src/communication/http_client.cpp
     src/communication/http_agent_client.cpp
     src/collectors/system_metrics.cpp
     src/collectors/docker_monitor.cpp
     src/collectors/process_scanner.cpp
+    src/collectors/port_scanner.cpp
     src/collectors/security_collector.cpp
+    src/collectors/log_collector.cpp
     src/detectors/service_detector.cpp
     src/handlers/docker_handler.cpp
     src/handlers/command_handler.cpp

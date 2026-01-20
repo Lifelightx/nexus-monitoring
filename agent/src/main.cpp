@@ -7,9 +7,11 @@
 #include "nexus/utils/config.h"
 #include "nexus/utils/agent_info.h"
 #include "nexus/utils/metrics_serializer.h"
+#include "nexus/utils/otlp_converter.h"
 #include "nexus/collectors/system_metrics.h"
 #include "nexus/collectors/process_scanner.h"
 #include "nexus/collectors/security_collector.h"
+#include "nexus/collectors/log_collector.h"
 #include "nexus/collectors/docker_monitor.h"
 #include "nexus/handlers/docker_handler.h"
 #include "nexus/handlers/command_handler.h"
@@ -85,6 +87,7 @@ int main(int argc, char* argv[]) {
     nexus::collectors::SystemMetrics sysMetrics;
     nexus::collectors::ProcessScanner procScanner;
     nexus::collectors::SecurityCollector secCollector; // Added SecurityCollector
+    nexus::collectors::LogCollector logCollector;
     
     // Initialize Docker monitor
     std::string dockerSocket = config.get("docker", "socket_path", "/var/run/docker.sock");
@@ -134,25 +137,12 @@ int main(int argc, char* argv[]) {
     // Initialize File Handler (Cross-Platform)
     auto fileHandler = std::make_shared<nexus::handlers::FileHandler>();
 
-    // Initialize WebSocket Client for real-time logs
-    auto wsClient = std::make_shared<nexus::communication::WebSocketClient>(backendUrl, agentName, agentToken);
-    
-    // Bind Docker Log Handlers
-    wsClient->onDockerLogsStart([dockerHandler, wsClient](const std::string& id) {
-        dockerHandler->startLogs(id, [wsClient](const std::string& cid, const std::string& data) {
-            nlohmann::json payload;
-            payload["containerId"] = cid;
-            payload["data"] = data;
-            wsClient->emit("docker:logs:data", payload);
-        });
-    });
-    
-    wsClient->onDockerLogsStop([dockerHandler](const std::string& id) {
-        dockerHandler->stopLogs(id);
-    });
-
-    // Start WebSocket connection
-    wsClient->connect();
+    // WebSocket disabled - using HTTP polling instead
+    // auto wsClient = std::make_shared<nexus::communication::WebSocketClient>(backendUrl, agentName, agentToken);
+    // wsClient->onDockerLogsStart([dockerHandler, wsClient](const std::string& id) { ... });
+    // wsClient->onDockerLogsStop([dockerHandler](const std::string& id) { ... });
+    // wsClient->connect();
+    logger.info("WebSocket disabled - using HTTP-only mode");
 
     // Initialize Command Handler (Polling)
     int pollIntervalMs = config.getInt("agent", "command_poll_ms", 500);
@@ -166,6 +156,8 @@ int main(int argc, char* argv[]) {
     // Main loop
     int iteration = 0;
     auto lastMetricsSend = std::chrono::steady_clock::now();
+    auto lastHeartbeat = std::chrono::steady_clock::now();
+    const int heartbeatInterval = 30; // seconds
     
     while (running) {
         auto now = std::chrono::steady_clock::now();
@@ -183,6 +175,30 @@ int main(int argc, char* argv[]) {
             if (dockerAvailable) {
                 dockerMonitor.collect();
             }
+
+            // Collect and send system logs
+            if (dockerAvailable) {
+                logCollector.collect(&dockerMonitor);
+            } else {
+                logCollector.collect(nullptr);
+            }
+            auto logs = logCollector.getAndClearLogs();
+            if (!logs.empty()) {
+                nlohmann::json logsJson = nlohmann::json::array();
+                for (const auto& log : logs) {
+                    logsJson.push_back({
+                        {"type", log.type},
+                        {"level", log.level},
+                        {"source", log.source},
+                        {"message", log.message},
+                        {"timestamp", log.timestamp},
+                        {"metadata", log.metadata}
+                    });
+                }
+                if (httpClient->sendLogs(logsJson)) {
+                     logger.debug("Sent {} logs to backend", logs.size());
+                }
+            }
             
             // Scan processes every 4 iterations (20s)
             if (iteration % 4 == 0) {
@@ -190,8 +206,8 @@ int main(int argc, char* argv[]) {
                 logger.debug("Scanned {} processes", procScanner.getProcesses().size());
                 
                 // Orchestrate instrumentation
-                // std::string nodeInjectorPath = config.get("instrumentation", "nodejs_injector_path", "/opt/nexus-agent/instrumentation/nodejs");
-                // nexus::orchestrator::InstrumentationManager instrManager(nodeInjectorPath);
+                std::string nodeInjectorPath = config.get("instrumentation", "nodejs_injector_path", "/opt/nexus-agent/instrumentation/nodejs");
+                nexus::orchestrator::InstrumentationManager instrManager(nodeInjectorPath);
                 
                 // Unified service detection
                 // Note: detectServices is already called later for metrics, but we do it here for orchestration
@@ -201,19 +217,80 @@ int main(int argc, char* argv[]) {
                 auto statuses = instrManager.scan(services);
             }
             
-            // Send metrics to backend via HTTP
-            auto metrics = nexus::utils::createMetricsPayload(
-                agentName, sysMetrics, dockerMonitor, procScanner, secCollector
+            // Send metrics to backend via OTLP format
+            // Convert system metrics to OTLP
+            auto otlpSystemMetrics = nexus::utils::OTLPConverter::convertSystemMetrics(
+                agentName, sysMetrics
             );
             
-            if (httpClient->sendMetrics(metrics)) {
-                logger.info("✓ Sent metrics to backend successfully");
+            // Convert Docker metrics to OTLP (if available)
+            nlohmann::json otlpDockerMetrics;
+            if (dockerAvailable) {
+                otlpDockerMetrics = nexus::utils::OTLPConverter::convertDockerMetrics(
+                    agentName, dockerMonitor
+                );
+            }
+            
+            // Send system metrics via OTLP endpoint
+            if (httpClient->sendOTLPMetrics(otlpSystemMetrics)) {
+                logger.info("✓ Sent system metrics (OTLP) to backend");
             } else {
-                logger.warn("✗ Failed to send metrics, will retry");
+                logger.warn("✗ Failed to send system metrics (OTLP)");
+            }
+            
+            // Send Docker metrics if available
+            if (dockerAvailable && !otlpDockerMetrics.empty()) {
+                if (httpClient->sendOTLPMetrics(otlpDockerMetrics)) {
+                    logger.info("✓ Sent Docker metrics (OTLP) to backend");
+                } else {
+                    logger.warn("✗ Failed to send Docker metrics (OTLP)");
+                }
+            }
+            
+            // Send full Docker details to /api/agent/metrics (for management UI)
+            if (dockerAvailable) {
+                // Detect services from processes and containers
+                auto services = nexus::detectors::detectServices(procScanner.getProcesses(), dockerMonitor.getContainers());
+                auto servicesJson = nexus::detectors::serializeServices(services);
+                
+                // Serialize processes
+                auto processesJson = nexus::utils::serializeProcesses(procScanner.getProcesses());
+                
+                nlohmann::json fullMetrics = {
+                    {"agent", agentName},
+                    {"dockerDetails", nexus::utils::serializeDockerData(dockerMonitor)},
+                    {"services", servicesJson},
+                    {"processes", processesJson},
+                    {"cpu", {
+                        {"usage_percent", sysMetrics.getCpuMetrics().usage_percent}
+                    }},
+                    {"memory", {
+                        {"usage_percent", sysMetrics.getMemoryMetrics().usage_percent},
+                        {"used_bytes", sysMetrics.getMemoryMetrics().used_bytes},
+                        {"total_bytes", sysMetrics.getMemoryMetrics().total_bytes}
+                    }}
+                };
+                
+                if (httpClient->sendMetrics(fullMetrics)) {
+                    logger.info("✓ Sent Docker details to backend");
+                } else {
+                    logger.warn("✗ Failed to send Docker details");
+                }
             }
             
             lastMetricsSend = now;
             iteration++;
+        }
+        
+        // Send heartbeat every 30 seconds to keep agent status updated
+        auto heartbeatElapsed = std::chrono::duration_cast<std::chrono::seconds>(now - lastHeartbeat).count();
+        if (heartbeatElapsed >= heartbeatInterval) {
+            if (httpClient->sendHeartbeat(agentName)) {
+                logger.debug("✓ Heartbeat sent successfully");
+            } else {
+                logger.warn("✗ Heartbeat failed");
+            }
+            lastHeartbeat = now;
         }
         
         // Sleep briefly
@@ -221,7 +298,7 @@ int main(int argc, char* argv[]) {
     }
     
     commandHandler.stop();
-    wsClient->disconnect();
+    // wsClient->disconnect(); // WebSocket disabled
     logger.info("=== Nexus Agent Stopped ===");
     return 0;
 }

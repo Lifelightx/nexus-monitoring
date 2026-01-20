@@ -1,6 +1,25 @@
 const Service = require('../models/Service');
 const Process = require('../models/Process');
 const Agent = require('../models/Agent');
+const { getClickHouseClient } = require('../services/clickhouseClient');
+
+const clickhouseClient = getClickHouseClient();
+
+/**
+ * Check if a service type supports instrumentation for tracing
+ */
+function isInstrumentableServiceType(serviceType) {
+    const instrumentableTypes = [
+        'Node.js',
+        'Python',
+        'Java',
+        'Go',
+        '.NET',
+        'Ruby',
+        'PHP'
+    ];
+    return instrumentableTypes.includes(serviceType);
+}
 
 /**
  * Get all services for a specific agent
@@ -22,7 +41,37 @@ exports.getAgentServices = async (req, res) => {
         const services = await Service.find({ agentId: agent._id })
             .sort({ name: 1 });
 
-        res.json(services);
+        // Query ClickHouse for active traces (last hour) for each service
+        const servicesWithTraces = await Promise.all(services.map(async (service) => {
+            let hasActiveTraces = false;
+
+            if (service.instrumentable) {
+                try {
+                    // Query ClickHouse for traces from this service in the last hour
+                    const query = `
+                        SELECT count() as trace_count
+                        FROM otel.otel_traces
+                        WHERE ServiceName = '${service.name}'
+                        AND Timestamp >= now() - INTERVAL 1 HOUR
+                        LIMIT 1
+                    `;
+
+                    const result = await clickhouseClient.query(query);
+                    if (result && result.length > 0 && result[0].trace_count > 0) {
+                        hasActiveTraces = true;
+                    }
+                } catch (error) {
+                    console.error(`Error checking traces for service ${service.name}:`, error.message);
+                }
+            }
+
+            return {
+                ...service.toObject(),
+                hasActiveTraces
+            };
+        }));
+
+        res.json(servicesWithTraces);
     } catch (error) {
         console.error('Error fetching agent services:', error);
         res.status(500).json({ message: 'Server error', error: error.message });
@@ -133,6 +182,8 @@ exports.updateServicesFromMetrics = async (agentId, servicesData) => {
         const currentServicePorts = new Set(servicesData.map(s => s.port));
 
         for (const serviceData of servicesData) {
+            const instrumentable = isInstrumentableServiceType(serviceData.type);
+
             await Service.findOneAndUpdate(
                 {
                     agentId: agentId,
@@ -142,6 +193,7 @@ exports.updateServicesFromMetrics = async (agentId, servicesData) => {
                     ...serviceData,
                     agentId: agentId,
                     lastSeen: new Date(),
+                    instrumentable: instrumentable,
                     // Use status from agent data (reflects actual container/process state)
                     status: serviceData.status || 'running'
                 },
