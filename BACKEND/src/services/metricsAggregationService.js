@@ -1,8 +1,10 @@
 const cron = require('node-cron');
-const Trace = require('../models/Trace');
-const Span = require('../models/Span');
+const { getClickHouseClient } = require('./clickhouseClient');
 const Service = require('../models/Service');
 const TraceMetrics = require('../models/TraceMetrics');
+const logger = require('../utils/logger');
+
+const clickhouseClient = getClickHouseClient();
 
 /**
  * Aggregate metrics from traces
@@ -14,98 +16,108 @@ async function aggregateMetrics() {
         const oneMinuteAgo = new Date(now - 60 * 1000);
         const timeBucket = new Date(Math.floor(now.getTime() / 60000) * 60000); // Round to minute
 
-        // Get all traces from the last minute
-        const traces = await Trace.find({
-            timestamp: { $gte: oneMinuteAgo, $lt: now }
-        });
+        // Query ClickHouse for aggregation
+        // We group by ServiceName and SpanName (Endpoint)
+        const query = `
+            SELECT 
+                ServiceName as service,
+                SpanName as endpoint,
+                count() as request_count,
+                avg(Duration) / 1000000 as avg_latency_ms,
+                quantile(0.50)(Duration / 1000000) as p50_latency_ms,
+                quantile(0.95)(Duration / 1000000) as p95_latency_ms,
+                quantile(0.99)(Duration / 1000000) as p99_latency_ms,
+                countIf(StatusCode = 'Error' OR StatusCode = '2') as error_count
+            FROM otel.otel_traces
+            WHERE Timestamp >= now() - INTERVAL 1 MINUTE
+            AND SpanKind = 'Server' -- Only count server spans (incoming requests)
+            GROUP BY ServiceName, SpanName
+        `;
 
-        if (traces.length === 0) return;
+        const result = await clickhouseClient.query(query);
 
-        // Group traces by service and endpoint
-        const groups = {};
-        for (const trace of traces) {
-            if (!trace.service_id) continue;
+        if (!result || !result.data || result.data.length === 0) {
+            return;
+        }
 
-            const key = `${trace.service_id}_${trace.endpoint}`;
-            if (!groups[key]) {
-                groups[key] = {
-                    service_id: trace.service_id,
-                    endpoint: trace.endpoint,
-                    traces: []
+        const aggregations = result.data;
+        const serviceUpdates = {}; // Map to store service-level aggregates
+
+        for (const agg of aggregations) {
+            const {
+                service, endpoint, request_count,
+                avg_latency_ms, p50_latency_ms, p95_latency_ms, p99_latency_ms,
+                error_count
+            } = agg;
+
+            const error_rate = (error_count / request_count) * 100;
+
+            // Update or Create Service in Mongo
+            // We need to resolve ServiceName to a Service ID or create it if missing
+            // For now, we assume agent registers it, but we can upsert based on name
+
+            // Find service by name
+            let serviceDoc = await Service.findOne({ name: service });
+
+            if (!serviceDoc) {
+                // If service doesn't exist, we might skip or create a placeholder
+                // Ideally, the Agent registration creates the Service document
+                // logic here: skip if not found to avoid ghost services
+                continue;
+            }
+
+            // Save trace metrics (Historical)
+            await TraceMetrics.create({
+                service_id: serviceDoc._id,
+                endpoint: endpoint,
+                time_bucket: timeBucket,
+                request_count,
+                avg_latency_ms,
+                p50_latency_ms,
+                p95_latency_ms,
+                p99_latency_ms,
+                error_count,
+                error_rate
+            });
+
+            // Accumulate for Service Level Metrics (Live View)
+            if (!serviceUpdates[service]) {
+                serviceUpdates[service] = {
+                    total_reqs: 0,
+                    total_errors: 0,
+                    latencies: []
                 };
             }
-            groups[key].traces.push(trace);
+            serviceUpdates[service].total_reqs += request_count;
+            serviceUpdates[service].total_errors += error_count;
+            // Weighted average approach for latency is complex, 
+            // taking max p95 for the minute as a safe "worst case" indicator
+            serviceUpdates[service].latencies.push(p95_latency_ms);
         }
 
-        // Calculate metrics for each group
-        for (const [key, group] of Object.entries(groups)) {
-            const { service_id, endpoint, traces } = group;
+        // Update Service Collection with Live Metrics
+        for (const [serviceName, data] of Object.entries(serviceUpdates)) {
+            const errorRate = (data.total_errors / data.total_reqs) * 100;
+            const p95Latency = Math.max(...data.latencies);
+            const requestsPerMin = data.total_reqs; // It's a 1-minute bucket
 
-            // Calculate latency metrics
-            const latencies = traces.map(t => t.duration_ms).sort((a, b) => a - b);
-            const avgLatency = latencies.reduce((sum, l) => sum + l, 0) / latencies.length;
-            const p50 = latencies[Math.floor(latencies.length * 0.5)];
-            const p95 = latencies[Math.floor(latencies.length * 0.95)];
-            const p99 = latencies[Math.floor(latencies.length * 0.99)];
-
-            // Calculate error rate
-            const errorCount = traces.filter(t => t.error || t.status_code >= 400).length;
-            const errorRate = (errorCount / traces.length) * 100;
-
-            // Calculate time breakdown
-            let totalDbTime = 0;
-            let totalDownstreamTime = 0;
-
-            for (const trace of traces) {
-                const spans = await Span.find({ trace_id: trace.trace_id });
-
-                const dbTime = spans
-                    .filter(s => s.type === 'db')
-                    .reduce((sum, s) => sum + s.duration_ms, 0);
-
-                const downstreamTime = spans
-                    .filter(s => s.type === 'external')
-                    .reduce((sum, s) => sum + s.duration_ms, 0);
-
-                totalDbTime += dbTime;
-                totalDownstreamTime += downstreamTime;
-            }
-
-            const avgDbTime = totalDbTime / traces.length;
-            const avgDownstreamTime = totalDownstreamTime / traces.length;
-            const avgCodeTime = avgLatency - avgDbTime - avgDownstreamTime;
-
-            // Store metrics
-            await TraceMetrics.create({
-                service_id,
-                endpoint,
-                time_bucket: timeBucket,
-                request_count: traces.length,
-                avg_latency_ms: Math.round(avgLatency),
-                p50_latency_ms: Math.round(p50),
-                p95_latency_ms: Math.round(p95),
-                p99_latency_ms: Math.round(p99),
-                error_count: errorCount,
-                error_rate: Math.round(errorRate * 100) / 100,
-                avg_db_time_ms: Math.round(avgDbTime),
-                avg_downstream_time_ms: Math.round(avgDownstreamTime),
-                avg_code_time_ms: Math.round(avgCodeTime)
-            });
-
-            // Update service metrics
-            await Service.findByIdAndUpdate(service_id, {
-                'metrics.p95Latency': Math.round(p95),
-                'metrics.p99Latency': Math.round(p99),
-                'metrics.errorRate': Math.round(errorRate * 100) / 100,
-                'metrics.avgDbTime': Math.round(avgDbTime),
-                'metrics.avgDownstreamTime': Math.round(avgDownstreamTime),
-                'metrics.avgCodeTime': Math.round(avgCodeTime)
-            });
+            await Service.updateOne(
+                { name: serviceName },
+                {
+                    $set: {
+                        'metrics.requestsPerMin': requestsPerMin,
+                        'metrics.p95Latency': p95Latency,
+                        'metrics.errorRate': errorRate,
+                        'lastSeen': new Date()
+                    }
+                }
+            );
         }
 
-        console.log(`[Metrics] Aggregated metrics for ${Object.keys(groups).length} service/endpoint combinations`);
+        logger.info(`[Metrics] Aggregated metrics for ${aggregations.length} endpoints`);
+
     } catch (error) {
-        console.error('[Metrics] Error aggregating metrics:', error);
+        logger.error('[Metrics] Error aggregating metrics:', error.message);
     }
 }
 
@@ -115,7 +127,7 @@ async function aggregateMetrics() {
 function startMetricsAggregation() {
     // Run every minute
     cron.schedule('* * * * *', aggregateMetrics);
-    console.log('[Metrics] Metrics aggregation scheduler started (runs every minute)');
+    logger.info('[Metrics] Metrics aggregation scheduler started (runs every minute)');
 }
 
 module.exports = {

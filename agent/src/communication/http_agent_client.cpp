@@ -60,11 +60,43 @@ bool HttpAgentClient::sendHeartbeat(const std::string& agentName) {
 
 bool HttpAgentClient::sendMetrics(const json& metrics) {
     try {
-        json response = httpPost("/api/agent/metrics", metrics);
+        auto response = httpPost("/api/agent/metrics", metrics);
         return response.contains("success") && response["success"].get<bool>();
-        
     } catch (const std::exception& e) {
-        Logger::getInstance().error("Metrics submission failed: {}", e.what());
+        nexus::Logger::getInstance().error("Failed to send metrics: {}", e.what());
+        return false;
+    }
+}
+
+
+
+bool HttpAgentClient::sendLogs(const json& logs) {
+    try {
+        if (!agentId_.empty()) {
+            json payload = {
+                {"agentId", agentId_},
+                {"logs", logs}
+            };
+            auto response = httpPost("/api/logs/batch", payload);
+            return response.contains("success") && response["success"].get<bool>();
+        } else {
+             // Fallback if agentId not set yet (should not happen if registered)
+             // Try to just send logs, backend might need token
+             return false;
+        }
+    } catch (const std::exception& e) {
+        nexus::Logger::getInstance().error("Failed to send logs: {}", e.what());
+        return false;
+    }
+}
+
+bool HttpAgentClient::sendOTLPMetrics(const json& otlpMetrics) {
+    try {
+        // Send to backend's OTLP endpoint
+        auto response = httpPost("/v1/metrics", otlpMetrics);
+        return response.contains("success") && response["success"].get<bool>();
+    } catch (const std::exception& e) {
+        nexus::Logger::getInstance().error("Failed to send OTLP metrics: {}", e.what());
         return false;
     }
 }

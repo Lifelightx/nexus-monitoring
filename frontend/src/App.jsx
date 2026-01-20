@@ -31,7 +31,11 @@ import GlobalDashboard from './pages/apm/GlobalDashboard';
 import ServicesList from './pages/apm/ServicesList';
 import ServiceDetails from './pages/apm/ServiceDetails';
 import TraceExplorer from './pages/apm/TraceExplorer';
+import TracesList from './pages/apm/TracesList';
 import TraceWaterfall from './pages/apm/TraceWaterfall';
+import OTelMetricsDashboard from './pages/otel/OTelMetricsDashboard';
+import OTelTraceExplorer from './pages/otel/OTelTraceExplorer';
+import OTelTraceDetails from './pages/otel/OTelTraceDetails';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -64,7 +68,7 @@ const DockerDetailsWrapper = () => {
   const context = useOutletContext(); // Get context from ServerLayout
 
   // Prefer data from location state, then context, then null
-  const dockerData = location.state?.dockerData || context?.metrics?.dockerDetails;
+  const dockerData = location.state?.dockerData || context?.metrics?.dockerDetails || context?.agent?.latestDockerInfo;
   const agentName = location.state?.agentName || context?.agent?.name;
 
   return <DockerDetails serverId={serverId} dockerData={dockerData} agentName={agentName} initialTab={tab} />;
@@ -126,6 +130,13 @@ function App() {
 
                   {/* APM Routes - Standalone */}
                   <Route path="/traces/:traceId/details" element={<TraceWaterfall />} />
+                  <Route path="/apm/services" element={<ServicesList />} />
+                  <Route path="/apm/traces" element={<TracesList />} />
+
+                  {/* OpenTelemetry Routes */}
+                  <Route path="/otel/metrics" element={<OTelMetricsDashboard />} />
+                  <Route path="/otel/traces" element={<OTelTraceExplorer />} />
+                  <Route path="/otel/traces/:traceId" element={<OTelTraceDetails />} />
 
                   {/* Server Routes wrapped in ServerLayout */}
                   <Route path="/server/:id" element={<ServerLayout />}>

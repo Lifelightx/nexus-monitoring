@@ -42,12 +42,27 @@ WebSocketClient::WebSocketClient(const std::string& url, const std::string& agen
         }
     }
     
-    // Socket.io WebSocket path
-    path_ = "/socket.io/?EIO=4&transport=websocket";
+    // Plain WebSocket path for agent connections
+    path_ = "/ws/agent";
 }
 
 WebSocketClient::~WebSocketClient() {
-    disconnect();
+    // Stop the run loop first
+    running_ = false;
+    
+    // Join the thread before destroying anything
+    if (io_thread_.joinable()) {
+        io_thread_.join();
+    }
+    
+    // Now safely close the WebSocket
+    if (connected_) {
+        try {
+            ws_.close(websocket::close_code::normal);
+        } catch (...) {
+            // Ignore errors during shutdown
+        }
+    }
 }
 
 bool WebSocketClient::connect() {
@@ -81,10 +96,8 @@ void WebSocketClient::doConnect() {
         curl_free(encoded_auth);
         curl_easy_cleanup(curl_encoder);
         
-        // Connect directly with WebSocket transport
-        // Path: /socket.io/?EIO=4&transport=websocket&auth=...
-        
-        path_ = "/socket.io/?EIO=4&transport=websocket&auth=" + auth_param;
+        // Plain WebSocket connection (no Socket.IO)
+        path_ = "/ws/agent";
         
         // Resolve hostname
         auto const results = resolver_.resolve(host_, port_);
@@ -94,8 +107,8 @@ void WebSocketClient::doConnect() {
         
         // Set WebSocket options
         ws_.set_option(websocket::stream_base::decorator(
-            [this](websocket::request_type& req) {
-                req.set(http::field::sec_websocket_protocol, "websocket");
+            [](websocket::request_type& req) {
+                req.set(http::field::user_agent, "NexusAgent/1.0");
             }
         ));
         
@@ -105,10 +118,8 @@ void WebSocketClient::doConnect() {
         connected_ = true;
         Logger::getInstance().info("WebSocket connected to {}:{}", host_, port_);
         
-        // Trigger connect callback
-        if (on_connect_) {
-            on_connect_();
-        }
+        // Don't send registration here - wait for welcome message in doRead()
+        // The server will send a "connected" message first
         
     } catch (std::exception const& e) {
         Logger::getInstance().error("WebSocket connection attempt failed: {}", e.what());
@@ -118,17 +129,23 @@ void WebSocketClient::doConnect() {
 }
 
 void WebSocketClient::disconnect() {
-    running_ = false; // Stop the run loop
+    if (!running_ && !connected_) return; // Already disconnected
     
-    if (!connected_) return;
+    running_ = false; // Stop the run loop
     connected_ = false;
     
-    try {
-        ws_.close(websocket::close_code::normal);
-    } catch (...) {}
-    
+    // Join the thread first
     if (io_thread_.joinable()) {
         io_thread_.join();
+    }
+    
+    // Then close the WebSocket
+    try {
+        if (ws_.is_open()) {
+            ws_.close(websocket::close_code::normal);
+        }
+    } catch (...) {
+        // Ignore errors during disconnect
     }
     
     if (on_disconnect_) {
@@ -183,41 +200,74 @@ void WebSocketClient::doRead() {
     
     if (message.empty()) return;
     
-// Protocol:
-    char msg_type = message[0];
-    // '0' => Open (Server sends session ID) -> Client must send "40" (Connect to namespace)
-    // '2' => Ping -> Client must send "3" (Pong)
-    // '4' => Message
-    // '40' => Connect (Client -> Server)
-    // '42' => Event (Server -> Client)
-
-    if (msg_type == '0') {
-        // Open packet received, send Connect packet
-        Logger::getInstance().info("Received Open packet, sending Connect");
-        try {
-             ws_.write(net::buffer("40")); // Connect to default namespace
-        } catch (std::exception const& e) {
-             Logger::getInstance().error("Failed to send Connect: {}", e.what());
-        }
-    }
-    else if (msg_type == '2') {
-        Logger::getInstance().debug("Received PING, sending PONG");
-        try {
-             ws_.write(net::buffer("3"));
-        } catch (std::exception const& e) {
-             Logger::getInstance().error("Failed to send PONG: {}", e.what());
-        }
-    } else if (msg_type == '4' && message.length() > 1) {
-        // Socket.io message
-        char sub_type = message[1];
+    // Parse JSON message
+    try {
+        json parsed = json::parse(message);
         
-        if (sub_type == '0') {
-            // Connection acknowledged
-            Logger::getInstance().info("Socket.io connection acknowledged");
-        } else if (sub_type == '2') {
-            // Event message
-            handleMessage(message);
+        if (!parsed.contains("type")) {
+            Logger::getInstance().warn("Received message without type field");
+            return;
         }
+        
+        std::string msgType = parsed["type"].get<std::string>();
+        
+        if (msgType == "connected") {
+            Logger::getInstance().info("Received connected acknowledgment");
+            
+            // Now send registration message
+            json registerMsg = {
+                {"type", "register"},
+                {"data", {
+                    {"name", agent_name_},
+                    {"token", token_}
+                }}
+            };
+            
+            try {
+                std::string msg = registerMsg.dump();
+                ws_.write(net::buffer(msg));
+                Logger::getInstance().info("Sent registration message");
+            } catch (std::exception const& e) {
+                Logger::getInstance().error("Failed to send registration: {}", e.what());
+            }
+        }
+        else if (msgType == "auth_success" || msgType == "register_success") {
+            Logger::getInstance().info("Registration successful");
+            if (parsed.contains("agentId")) {
+                Logger::getInstance().info("Agent ID: {}", parsed["agentId"].get<std::string>());
+            }
+            
+            // Trigger connect callback now that we're fully registered
+            if (on_connect_) {
+                on_connect_();
+            }
+        }
+        else if (msgType == "ping") {
+            // Respond to ping
+            json pong = {{"type", "pong"}};
+            try {
+                std::string pongMsg = pong.dump();
+                ws_.write(net::buffer(pongMsg));
+            } catch (std::exception const& e) {
+                Logger::getInstance().error("Failed to send pong: {}", e.what());
+            }
+        }
+        else if (msgType == "pong") {
+            Logger::getInstance().debug("Received pong");
+        }
+        else if (msgType == "error" || msgType == "auth_error") {
+            std::string errMsg = parsed.value("message", "Unknown error");
+            Logger::getInstance().error("Server error: {}", errMsg);
+        }
+        else {
+            // Handle other message types
+            handleMessage(parsed); // Pass the parsed JSON directly
+            Logger::getInstance().debug("Received message type: {}", msgType);
+        }
+        
+    } catch (const json::exception& e) {
+        Logger::getInstance().error("Failed to parse WebSocket message: {}", e.what());
+        Logger::getInstance().debug("Raw message: {}", message);
     }
 }
 

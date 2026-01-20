@@ -1,286 +1,336 @@
 import React, { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { useSocket } from '../../context/SocketContext';
-import { API_BASE_URL } from '../../config';
+import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import otelService from '../../services/otelService';
 
 const ServerMetrics = () => {
     const { agent } = useOutletContext();
-    const [history, setHistory] = useState([]);
-    const [currentMetrics, setCurrentMetrics] = useState(null);
-    const socket = useSocket();
+    const [timeRange, setTimeRange] = useState('1h');
+    const [metrics, setMetrics] = useState({
+        cpu: [],
+        memory: [],
+        disk: [],
+        network: []
+    });
+    const [loading, setLoading] = useState(true);
+    const [lastUpdate, setLastUpdate] = useState(null);
 
     useEffect(() => {
-        if (!socket) return;
+        const fetchTimeSeries = async () => {
+            try {
+                setLoading(true);
 
-        const handleUpdate = (data) => {
-            if (data.agentId === agent?._id) {
-                console.log('ServerMetrics received data:', data);
-                setCurrentMetrics(data);
-                setHistory(prev => {
-                    const newHistory = [...prev, {
-                        time: new Date(data.timestamp).toLocaleTimeString(),
-                        cpu: data.cpu.load,
-                        memory: (data.memory.used / data.memory.total) * 100,
-                        netRx: data.network[0].rx_sec / 1024,
-                        netTx: data.network[0].tx_sec / 1024
-                    }];
-                    return newHistory.slice(-20);
+                // Calculate time range
+                const now = new Date();
+                const hoursMap = { '1h': 1, '6h': 6, '24h': 24, '7d': 168 };
+                const hours = hoursMap[timeRange] || 1;
+                const startTime = new Date(now - hours * 60 * 60 * 1000).toISOString();
+                const endTime = now.toISOString();
+                const step = hours > 24 ? '1h' : '5m';
+
+                // Fetch time-series data
+                const [cpuData, memoryData, diskData, networkData] = await Promise.all([
+                    otelService.getMetricTimeSeries('system_cpu_usage_percent', {
+                        startTime,
+                        endTime,
+                        step
+                    }),
+                    otelService.getMetricTimeSeries('system_memory_usage_percent', {
+                        startTime,
+                        endTime,
+                        step
+                    }),
+                    otelService.getMetricTimeSeries('system_filesystem_usage_percent', {
+                        startTime,
+                        endTime,
+                        step
+                    }),
+                    otelService.getMetricTimeSeries('system_network_io_bytes', {
+                        startTime,
+                        endTime,
+                        step
+                    })
+                ]);
+
+                // Format data for charts
+                const formatTimeSeries = (data) => {
+                    if (!data.success || !data.data || data.data.length === 0) return [];
+
+                    const series = data.data[0]; // Get first metric series
+                    if (!series || !series.values) return [];
+
+                    return series.values.map(v => ({
+                        time: new Date(v.timestamp).toLocaleTimeString(),
+                        value: v.value
+                    }));
+                };
+
+                setMetrics({
+                    cpu: formatTimeSeries(cpuData),
+                    memory: formatTimeSeries(memoryData),
+                    disk: formatTimeSeries(diskData),
+                    network: formatTimeSeries(networkData)
                 });
+
+                setLastUpdate(new Date());
+                setLoading(false);
+            } catch (error) {
+                console.error('Error fetching time-series metrics:', error);
+                setLoading(false);
             }
         };
 
-        socket.on('dashboard:update', handleUpdate);
-        return () => socket.off('dashboard:update', handleUpdate);
-    }, [socket, agent]);
+        fetchTimeSeries();
 
-    if (!currentMetrics) {
+        // Auto-refresh every 30 seconds
+        const interval = setInterval(fetchTimeSeries, 30000);
+        return () => clearInterval(interval);
+    }, [timeRange]);
+
+    if (loading && metrics.cpu.length === 0) {
         return (
             <div className="flex items-center justify-center h-full min-h-[400px]">
                 <div className="flex flex-col items-center gap-4">
-                    <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                    <div className="text-gray-400 animate-pulse">Waiting for server metrics...</div>
+                    <div className="w-12 h-12 border-4 border-accent border-t-transparent rounded-full animate-spin"></div>
+                    <div className="text-text-secondary animate-pulse">Loading time-series data...</div>
                 </div>
             </div>
         );
     }
 
-    const downloadReport = () => {
-        window.open(`${API_BASE_URL}/api/metrics/${agent._id}/report?days=7`, '_blank');
-    };
-
     return (
-        <div className="text-white">
-            <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold">Server Metrics</h2>
-                <button
-                    onClick={downloadReport}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
-                >
-                    <i className="fas fa-file-pdf"></i> Download PDF Report (7 Days)
-                </button>
+        <div className="space-y-6">
+            {/* Header */}
+            <div className="flex justify-between items-center">
+                <div>
+                    <h2 className="text-2xl font-bold text-white">Metrics Dashboard</h2>
+                    <p className="text-text-secondary text-sm mt-1">Historical performance data and trends</p>
+                </div>
+                <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 text-sm text-text-secondary">
+                        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                        Updated {lastUpdate?.toLocaleTimeString()}
+                    </div>
+                    <select
+                        value={timeRange}
+                        onChange={(e) => setTimeRange(e.target.value)}
+                        className="px-4 py-2 bg-bg-secondary/50 border border-white/10 rounded-lg text-white focus:outline-none focus:border-accent transition-colors"
+                    >
+                        <option value="1h">Last Hour</option>
+                        <option value="6h">Last 6 Hours</option>
+                        <option value="24h">Last 24 Hours</option>
+                        <option value="7d">Last 7 Days</option>
+                    </select>
+                </div>
             </div>
 
-            {currentMetrics && (
-                <div className="space-y-6">
-                    {/* System Status & Uptime */}
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                        <div className="glass p-6 rounded-xl border-l-4 border-blue-500">
-                            <h3 className="text-sm text-gray-400 mb-1">System Uptime</h3>
-                            <div className="text-xl font-mono text-white">
-                                {currentMetrics.uptime ? (currentMetrics.uptime / 3600).toFixed(1) + ' hrs' : 'N/A'}
-                            </div>
+            {/* Charts Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* CPU Usage Chart */}
+                <div className="bg-bg-secondary/50 backdrop-blur-sm p-6 rounded-xl border border-white/5">
+                    <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                        <i className="fas fa-microchip text-accent"></i>
+                        CPU Usage Over Time
+                    </h3>
+                    {metrics.cpu.length > 0 ? (
+                        <ResponsiveContainer width="100%" height={300}>
+                            <AreaChart data={metrics.cpu}>
+                                <defs>
+                                    <linearGradient id="cpuGradient" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#38bdf8" stopOpacity={0.3} />
+                                        <stop offset="95%" stopColor="#38bdf8" stopOpacity={0} />
+                                    </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
+                                <XAxis
+                                    dataKey="time"
+                                    stroke="#94a3b8"
+                                    fontSize={12}
+                                    tick={{ fill: '#94a3b8' }}
+                                />
+                                <YAxis
+                                    stroke="#94a3b8"
+                                    fontSize={12}
+                                    domain={[0, 100]}
+                                    tick={{ fill: '#94a3b8' }}
+                                />
+                                <Tooltip
+                                    contentStyle={{
+                                        backgroundColor: '#1e293b',
+                                        border: '1px solid #ffffff10',
+                                        borderRadius: '8px'
+                                    }}
+                                    itemStyle={{ color: '#fff' }}
+                                />
+                                <Area
+                                    type="monotone"
+                                    dataKey="value"
+                                    stroke="#38bdf8"
+                                    fill="url(#cpuGradient)"
+                                    strokeWidth={2}
+                                    name="CPU %"
+                                />
+                            </AreaChart>
+                        </ResponsiveContainer>
+                    ) : (
+                        <div className="h-[300px] flex items-center justify-center text-text-secondary">
+                            No CPU data available for this time range
                         </div>
-                        <div className="glass p-6 rounded-xl border-l-4 border-purple-500">
-                            <h3 className="text-sm text-gray-400 mb-1">Agent Uptime</h3>
-                            <div className="text-xl font-mono text-white">
-                                {currentMetrics.agentUptime ? (currentMetrics.agentUptime / 3600).toFixed(1) + ' hrs' : 'N/A'}
-                            </div>
-                        </div>
-                        <div className="glass p-6 rounded-xl border-l-4 border-green-500">
-                            <h3 className="text-sm text-gray-400 mb-1">Last Reboot</h3>
-                            <div className="text-sm font-mono text-white">
-                                {currentMetrics.bootTime ? new Date(currentMetrics.bootTime).toLocaleString() : 'N/A'}
-                            </div>
-                        </div>
-                        <div className="glass p-6 rounded-xl border-l-4 border-orange-500">
-                            <h3 className="text-sm text-gray-400 mb-1">OS Info</h3>
-                            <div className="text-sm font-mono text-white truncate" title={`${currentMetrics.os?.distro} ${currentMetrics.os?.release}`}>
-                                {currentMetrics.os?.distro} {currentMetrics.os?.release}
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* CPU & Load */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div className="glass p-6 rounded-xl">
-                            <h3 className="text-lg font-bold text-white mb-4">Load Average</h3>
-                            <div className="flex justify-between items-center">
-                                <div className="text-center">
-                                    <div className="text-sm text-gray-400">1 min</div>
-                                    <div className={`text-xl font-mono ${currentMetrics.cpu.loadAvg?.[0] > currentMetrics.cpu.cores ? 'text-red-400' : 'text-blue-400'}`}>
-                                        {currentMetrics.cpu.loadAvg?.[0]?.toFixed(2) || 'N/A'}
-                                    </div>
-                                </div>
-                                <div className="text-center">
-                                    <div className="text-sm text-gray-400">5 min</div>
-                                    <div className="text-xl font-mono text-blue-400">{currentMetrics.cpu.loadAvg?.[1]?.toFixed(2) || 'N/A'}</div>
-                                </div>
-                                <div className="text-center">
-                                    <div className="text-sm text-gray-400">15 min</div>
-                                    <div className="text-xl font-mono text-blue-400">{currentMetrics.cpu.loadAvg?.[2]?.toFixed(2) || 'N/A'}</div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="glass p-6 rounded-xl">
-                            <h3 className="text-lg font-bold text-white mb-4">CPU Status</h3>
-                            <div className="space-y-2">
-                                <div className="flex justify-between">
-                                    <span className="text-gray-400">Temperature</span>
-                                    <span className="font-mono text-orange-400">
-                                        {currentMetrics.cpu.temperature ? `${currentMetrics.cpu.temperature}°C` : 'N/A'}
-                                    </span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-gray-400">Cores (Phys/Log)</span>
-                                    <span className="font-mono text-white">
-                                        {currentMetrics.cpu.physicalCores} / {currentMetrics.cpu.cores}
-                                    </span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-gray-400">Total Load</span>
-                                    <span className="font-mono text-blue-400">{currentMetrics.cpu.load.toFixed(1)}%</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="glass p-6 rounded-xl overflow-y-auto max-h-[200px]">
-                            <h3 className="text-lg font-bold text-white mb-4">Per Core Usage</h3>
-                            <div className="space-y-2">
-                                {currentMetrics.cpu.processors?.map((load, i) => (
-                                    <div key={i} className="flex items-center text-xs">
-                                        <span className="w-8 text-gray-400">#{i}</span>
-                                        <div className="flex-1 h-2 bg-gray-700 rounded-full overflow-hidden mx-2">
-                                            <div
-                                                className="h-full bg-blue-500 rounded-full transition-all duration-500"
-                                                style={{ width: `${load}%` }}
-                                            ></div>
-                                        </div>
-                                        <span className="w-10 text-right font-mono text-white">{load.toFixed(0)}%</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Top Processes */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="glass p-6 rounded-xl">
-                            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                                <i className="fas fa-microchip text-blue-400"></i> Top Processes (CPU)
-                            </h3>
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-sm text-left">
-                                    <thead className="text-gray-400 border-b border-gray-700">
-                                        <tr>
-                                            <th className="pb-2">PID</th>
-                                            <th className="pb-2">Name</th>
-                                            <th className="pb-2">User</th>
-                                            <th className="pb-2 text-right">CPU%</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="font-mono">
-                                        {currentMetrics.processes?.topCpu?.map(p => (
-                                            <tr key={p.pid} className="border-b border-gray-800 last:border-0">
-                                                <td className="py-2 text-gray-500">{p.pid}</td>
-                                                <td className="py-2 text-white truncate max-w-[150px]" title={p.name}>{p.name}</td>
-                                                <td className="py-2 text-gray-400">{p.user}</td>
-                                                <td className="py-2 text-right text-blue-400">{p.cpu.toFixed(1)}%</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-
-                        <div className="glass p-6 rounded-xl">
-                            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                                <i className="fas fa-memory text-purple-400"></i> Top Processes (Memory)
-                            </h3>
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-sm text-left">
-                                    <thead className="text-gray-400 border-b border-gray-700">
-                                        <tr>
-                                            <th className="pb-2">PID</th>
-                                            <th className="pb-2">Name</th>
-                                            <th className="pb-2">User</th>
-                                            <th className="pb-2 text-right">Mem%</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="font-mono">
-                                        {currentMetrics.processes?.topMem?.map(p => (
-                                            <tr key={p.pid} className="border-b border-gray-800 last:border-0">
-                                                <td className="py-2 text-gray-500">{p.pid}</td>
-                                                <td className="py-2 text-white truncate max-w-[150px]" title={p.name}>{p.name}</td>
-                                                <td className="py-2 text-gray-400">{p.user}</td>
-                                                <td className="py-2 text-right text-purple-400">{p.mem.toFixed(1)}%</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Security & Users */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div className="glass p-6 rounded-xl">
-                            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                                <i className="fas fa-users text-green-400"></i> Active Users
-                            </h3>
-                            <div className="space-y-3 max-h-[200px] overflow-y-auto">
-                                {currentMetrics.users?.length > 0 ? (
-                                    currentMetrics.users.map((u, i) => (
-                                        <div key={i} className="flex justify-between items-center border-b border-gray-800 pb-2 last:border-0">
-                                            <div>
-                                                <div className="font-medium text-white">{u.user}</div>
-                                                <div className="text-xs text-gray-500">{u.tty} ({u.ip})</div>
-                                            </div>
-                                            <div className="text-xs text-gray-400">
-                                                {u.date} {u.time}
-                                            </div>
-                                        </div>
-                                    ))
-                                ) : (
-                                    <div className="text-gray-500 text-sm italic">No active users</div>
-                                )}
-                            </div>
-                        </div>
-
-                        <div className="glass p-6 rounded-xl">
-                            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                                <i className="fas fa-shield-alt text-red-400"></i> Failed Logins
-                            </h3>
-                            <div className="space-y-3 max-h-[200px] overflow-y-auto">
-                                {currentMetrics.security?.failedLogins?.length > 0 ? (
-                                    currentMetrics.security.failedLogins.map((l, i) => (
-                                        <div key={i} className="border-b border-gray-800 pb-2 last:border-0">
-                                            <div className="flex justify-between text-sm">
-                                                <span className="text-red-400 font-medium">{l.user || 'Unknown'}</span>
-                                                <span className="text-gray-500 text-xs">{l.time}</span>
-                                            </div>
-                                            <div className="text-xs text-gray-400 truncate" title={l.source}>
-                                                Source: {l.source || l.message || 'N/A'}
-                                            </div>
-                                        </div>
-                                    ))
-                                ) : (
-                                    <div className="text-gray-500 text-sm italic">No recent failed logins</div>
-                                )}
-                            </div>
-                        </div>
-
-                        <div className="glass p-6 rounded-xl">
-                            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                                <i className="fas fa-user-shield text-yellow-400"></i> Sudo Usage
-                            </h3>
-                            <div className="space-y-3 max-h-[200px] overflow-y-auto">
-                                {currentMetrics.security?.sudoUsage?.length > 0 ? (
-                                    currentMetrics.security.sudoUsage.map((l, i) => (
-                                        <div key={i} className="border-b border-gray-800 pb-2 last:border-0">
-                                            <div className="text-xs text-gray-300 break-all font-mono">
-                                                {l.raw}
-                                            </div>
-                                        </div>
-                                    ))
-                                ) : (
-                                    <div className="text-gray-500 text-sm italic">No recent sudo usage</div>
-                                )}
-                            </div>
-                        </div>
-                    </div>
+                    )}
                 </div>
-            )}
+
+                {/* Memory Usage Chart */}
+                <div className="bg-bg-secondary/50 backdrop-blur-sm p-6 rounded-xl border border-white/5">
+                    <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                        <i className="fas fa-memory text-purple-400"></i>
+                        Memory Usage Over Time
+                    </h3>
+                    {metrics.memory.length > 0 ? (
+                        <ResponsiveContainer width="100%" height={300}>
+                            <AreaChart data={metrics.memory}>
+                                <defs>
+                                    <linearGradient id="memGradient" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#a855f7" stopOpacity={0.3} />
+                                        <stop offset="95%" stopColor="#a855f7" stopOpacity={0} />
+                                    </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
+                                <XAxis
+                                    dataKey="time"
+                                    stroke="#94a3b8"
+                                    fontSize={12}
+                                    tick={{ fill: '#94a3b8' }}
+                                />
+                                <YAxis
+                                    stroke="#94a3b8"
+                                    fontSize={12}
+                                    domain={[0, 100]}
+                                    tick={{ fill: '#94a3b8' }}
+                                />
+                                <Tooltip
+                                    contentStyle={{
+                                        backgroundColor: '#1e293b',
+                                        border: '1px solid #ffffff10',
+                                        borderRadius: '8px'
+                                    }}
+                                    itemStyle={{ color: '#fff' }}
+                                />
+                                <Area
+                                    type="monotone"
+                                    dataKey="value"
+                                    stroke="#a855f7"
+                                    fill="url(#memGradient)"
+                                    strokeWidth={2}
+                                    name="Memory %"
+                                />
+                            </AreaChart>
+                        </ResponsiveContainer>
+                    ) : (
+                        <div className="h-[300px] flex items-center justify-center text-text-secondary">
+                            No memory data available for this time range
+                        </div>
+                    )}
+                </div>
+
+                {/* Disk Usage Chart */}
+                <div className="bg-bg-secondary/50 backdrop-blur-sm p-6 rounded-xl border border-white/5">
+                    <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                        <i className="fas fa-hdd text-blue-400"></i>
+                        Disk Usage Over Time
+                    </h3>
+                    {metrics.disk.length > 0 ? (
+                        <ResponsiveContainer width="100%" height={300}>
+                            <LineChart data={metrics.disk}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
+                                <XAxis
+                                    dataKey="time"
+                                    stroke="#94a3b8"
+                                    fontSize={12}
+                                    tick={{ fill: '#94a3b8' }}
+                                />
+                                <YAxis
+                                    stroke="#94a3b8"
+                                    fontSize={12}
+                                    domain={[0, 100]}
+                                    tick={{ fill: '#94a3b8' }}
+                                />
+                                <Tooltip
+                                    contentStyle={{
+                                        backgroundColor: '#1e293b',
+                                        border: '1px solid #ffffff10',
+                                        borderRadius: '8px'
+                                    }}
+                                    itemStyle={{ color: '#fff' }}
+                                />
+                                <Line
+                                    type="monotone"
+                                    dataKey="value"
+                                    stroke="#3b82f6"
+                                    strokeWidth={2}
+                                    dot={false}
+                                    name="Disk %"
+                                />
+                            </LineChart>
+                        </ResponsiveContainer>
+                    ) : (
+                        <div className="h-[300px] flex items-center justify-center text-text-secondary">
+                            No disk data available for this time range
+                        </div>
+                    )}
+                </div>
+
+                {/* Network I/O Chart */}
+                <div className="bg-bg-secondary/50 backdrop-blur-sm p-6 rounded-xl border border-white/5">
+                    <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                        <i className="fas fa-network-wired text-green-400"></i>
+                        Network I/O Over Time
+                    </h3>
+                    {metrics.network.length > 0 ? (
+                        <ResponsiveContainer width="100%" height={300}>
+                            <LineChart data={metrics.network}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
+                                <XAxis
+                                    dataKey="time"
+                                    stroke="#94a3b8"
+                                    fontSize={12}
+                                    tick={{ fill: '#94a3b8' }}
+                                />
+                                <YAxis
+                                    stroke="#94a3b8"
+                                    fontSize={12}
+                                    tick={{ fill: '#94a3b8' }}
+                                />
+                                <Tooltip
+                                    contentStyle={{
+                                        backgroundColor: '#1e293b',
+                                        border: '1px solid #ffffff10',
+                                        borderRadius: '8px'
+                                    }}
+                                    itemStyle={{ color: '#fff' }}
+                                />
+                                <Line
+                                    type="monotone"
+                                    dataKey="value"
+                                    stroke="#10b981"
+                                    strokeWidth={2}
+                                    dot={false}
+                                    name="Network (bytes)"
+                                />
+                            </LineChart>
+                        </ResponsiveContainer>
+                    ) : (
+                        <div className="h-[300px] flex items-center justify-center text-text-secondary">
+                            No network data available for this time range
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Auto-refresh indicator */}
+            <div className="text-center text-text-secondary text-sm">
+                <i className="fas fa-sync-alt mr-2"></i>
+                Auto-refreshing every 30 seconds
+            </div>
         </div>
     );
 };

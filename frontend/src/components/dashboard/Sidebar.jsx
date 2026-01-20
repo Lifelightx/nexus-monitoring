@@ -20,6 +20,8 @@ const Sidebar = () => {
     const globalMenuItems = [
         { name: 'Dashboard', icon: 'fas fa-th-large', path: '/dashboard' },
         { name: 'Servers', icon: 'fas fa-server', path: '/servers' },
+        { name: 'Services (APM)', icon: 'fas fa-project-diagram', path: '/apm/services' },
+        { name: 'Traces', icon: 'fas fa-network-wired', path: '/apm/traces' },
         { name: 'Metrics', icon: 'fas fa-chart-line', path: '/metrics' },
         { name: 'Alerts & Logs', icon: 'fas fa-bell', path: '/alerts' },
         { name: 'Settings', icon: 'fas fa-cog', path: '/settings' },

@@ -39,6 +39,30 @@ const DockerDetails = ({ dockerData, agentName, serverId: propServerId, initialT
         }
     }, [dockerData]);
 
+    // Fetch Docker data from API if not available in props/context
+    useEffect(() => {
+        if (!localDockerData && serverId) {
+            const fetchDockerData = async () => {
+                try {
+                    const token = localStorage.getItem('token');
+                    const response = await axios.get(
+                        `${API_BASE_URL}/api/agents/${serverId}`,
+                        { headers: { Authorization: `Bearer ${token}` } }
+                    );
+
+                    if (response.data.latestDockerInfo) {
+                        setLocalDockerData(response.data.latestDockerInfo);
+                        setLocalAgentName(response.data.name);
+                    }
+                } catch (error) {
+                    console.error('Error fetching Docker data:', error);
+                }
+            };
+
+            fetchDockerData();
+        }
+    }, [localDockerData, serverId]);
+
     // Socket.io for real-time updates
     useEffect(() => {
         if (!socket) return;
@@ -240,7 +264,6 @@ const DockerDetails = ({ dockerData, agentName, serverId: propServerId, initialT
                                     <table className="w-full">
                                         <thead>
                                             <tr className="text-left text-text-secondary border-b border-white/10">
-                                                <th className="p-3">Status</th>
                                                 <th className="p-3">Name</th>
                                                 <th className="p-3">Image</th>
                                                 <th className="p-3">State</th>
@@ -252,9 +275,6 @@ const DockerDetails = ({ dockerData, agentName, serverId: propServerId, initialT
                                         <tbody>
                                             {containers.map((container) => (
                                                 <tr key={container.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                                                    <td className="p-3">
-                                                        <div className={`w-3 h-3 rounded-full ${getStatusColor(container.state)}`}></div>
-                                                    </td>
                                                     <td className="p-3 font-medium">
                                                         {container.name}
                                                         <div className="text-xs text-text-secondary font-mono mt-1">{container.id.substring(0, 12)}</div>

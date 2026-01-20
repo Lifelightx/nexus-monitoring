@@ -20,6 +20,8 @@ public:
     
     // Metrics submission
     bool sendMetrics(const json& metrics);
+    bool sendOTLPMetrics(const json& otlpMetrics);
+    bool sendLogs(const json& logs);
     
     // Status check
     json getAgentStatus(const std::string& agentName);
