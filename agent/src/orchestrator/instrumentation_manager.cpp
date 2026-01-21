@@ -27,11 +27,6 @@ void InstrumentationManager::extractInstrumentationFiles() {
             // Create directories if needed
             fs::create_directories(full_path.parent_path());
             
-            // Convert hex string back to binary is NOT needed if we stored it as binary string
-            // But pack_resources.py created hex escaped string e.g. "\x4b\x2c..."
-            // Wait, C++ compiler interprets "\x.." as the char value.
-            // So 'content' in the map IS the binary content already.
-            
             if (!fs::exists(full_path)) {
                 Logger::getInstance().debug("Extracting {}", rel_path);
                 std::ofstream out(full_path, std::ios::binary);
@@ -58,8 +53,6 @@ std::vector<InstrumentationStatus> InstrumentationManager::scan(const std::vecto
             status.language = "nodejs";
             status.is_instrumented = isInstrumented(svc);
             
-
-            
             if (status.is_instrumented) {
                 status.details = "Auto-instrumentation loaded";
             } else {
@@ -75,7 +68,6 @@ std::vector<InstrumentationStatus> InstrumentationManager::scan(const std::vecto
                     // Attempt Systemd injection
                     std::string serviceName = injector_.getSystemdServiceName(svc.pid);
                     if (!serviceName.empty()) {
-                        Logger::getInstance().info("Found Systemd service for PID {}: {}", svc.pid, serviceName);
                         Logger::getInstance().info("Found Systemd service for PID {}: {}", svc.pid, serviceName);
                         // Inject!
                         std::map<std::string, std::string> envVars;

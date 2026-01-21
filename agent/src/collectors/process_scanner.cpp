@@ -112,7 +112,7 @@ bool ProcessScanner::scanProcess(int pid, const std::map<int, std::vector<int>>&
                 iss >> label >> ruid;
                 
                 struct passwd* pw = getpwuid(ruid);
-                if (pw) {
+                if (pw && pw->pw_name) {
                     proc.user = pw->pw_name;
                 } else {
                     proc.user = std::to_string(ruid);

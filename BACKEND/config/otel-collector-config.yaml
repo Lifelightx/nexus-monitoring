@@ -1,0 +1,85 @@
+receivers:
+  # OTLP Receiver - Accept telemetry from agents/backend
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # Batch processor - Optimize export performance
+  batch:
+    timeout: 10s
+    send_batch_size: 1024
+    send_batch_max_size: 2048
+
+  # Resource processor - Add/modify resource attributes
+  resource:
+    attributes:
+      - key: deployment.environment
+        value: development
+        action: insert
+
+  # Memory limiter - Prevent OOM
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512
+    spike_limit_mib: 128
+
+exporters:
+  # ClickHouse Exporter - Store traces
+  clickhouse:
+    endpoint: tcp://clickhouse:9000
+    database: otel
+    ttl: 72h
+    traces_table_name: otel_traces
+    logs_table_name: otel_logs
+    timeout: 10s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+
+  # Prometheus Remote Write - Send metrics to VictoriaMetrics
+  prometheusremotewrite:
+    endpoint: http://victoriametrics:8428/api/v1/write
+    tls:
+      insecure: true
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+
+  # Logging exporter - Debug output
+  logging:
+    verbosity: detailed
+    sampling_initial: 5
+    sampling_thereafter: 200
+
+service:
+  pipelines:
+    # Traces Pipeline: OTLP → ClickHouse (Direct)
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, batch]
+      exporters: [clickhouse, logging]
+
+    # Metrics Pipeline: OTLP → VictoriaMetrics (Direct)
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, batch]
+      exporters: [prometheusremotewrite, logging]
+
+  extensions: [health_check]
+  telemetry:
+    logs:
+      level: info
+    metrics:
+      address: 0.0.0.0:8888
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+

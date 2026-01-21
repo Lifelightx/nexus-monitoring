@@ -53,6 +53,23 @@ class OTelService {
     }
 
     /**
+     * Get daily network usage
+     */
+    async getDailyNetworkUsage(service) {
+        try {
+            const params = service ? { service } : {};
+            const response = await axios.get(`${API_BASE_URL}/api/otel/metrics/daily-usage`, { params });
+            if (response.data.success) {
+                return response.data.data;
+            }
+            return { rx: 0, tx: 0 };
+        } catch (error) {
+            console.error('Error fetching daily network usage:', error);
+            return { rx: 0, tx: 0 };
+        }
+    }
+
+    /**
      * Format metrics for display
      */
     formatMetricsForDisplay(metrics) {
@@ -144,4 +161,5 @@ export const getMetricTimeSeries = (metricName, options) => otelServiceInstance.
 export const getServices = () => otelServiceInstance.getServices();
 export const getTraces = () => Promise.resolve({ success: true, data: [] });
 export const getTraceDetails = (traceId) => Promise.resolve({ success: true, data: { traceId, spans: [] } });
+export const getDailyNetworkUsage = (service) => otelServiceInstance.getDailyNetworkUsage(service);
 export const formatMetricsForDisplay = (metrics) => otelServiceInstance.formatMetricsForDisplay(metrics);

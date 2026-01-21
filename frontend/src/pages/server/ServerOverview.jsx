@@ -14,18 +14,8 @@ const ServerOverview = () => {
     const [loading, setLoading] = useState(true);
     const [lastUpdate, setLastUpdate] = useState(null);
 
-    // Network usage tracking (daily reset)
-    const [dailyNetworkUsage, setDailyNetworkUsage] = useState(() => {
-        const stored = localStorage.getItem('dailyNetworkUsage');
-        if (stored) {
-            const parsed = JSON.parse(stored);
-            const today = new Date().toDateString();
-            if (parsed.date === today) {
-                return parsed;
-            }
-        }
-        return { date: new Date().toDateString(), rx: 0, tx: 0, lastRxTotal: 0, lastTxTotal: 0 };
-    });
+    // Network usage tracking
+    const [dailyNetworkUsage, setDailyNetworkUsage] = useState({ rx: 0, tx: 0, date: new Date().toDateString() });
 
     // Fetch OTel metrics from API
     useEffect(() => {
@@ -50,40 +40,8 @@ const ServerOverview = () => {
                     });
 
                     // Update daily network usage
-                    const today = new Date().toDateString();
-                    const networks = Object.values(formatted.network);
-                    const totalRxBytes = networks.reduce((sum, net) => sum + (net.rx || 0), 0);
-                    const totalTxBytes = networks.reduce((sum, net) => sum + (net.tx || 0), 0);
-
-                    setDailyNetworkUsage(prev => {
-                        // Reset if new day
-                        if (prev.date !== today) {
-                            const newUsage = {
-                                date: today,
-                                rx: 0,
-                                tx: 0,
-                                lastRxTotal: totalRxBytes,
-                                lastTxTotal: totalTxBytes
-                            };
-                            localStorage.setItem('dailyNetworkUsage', JSON.stringify(newUsage));
-                            return newUsage;
-                        }
-
-                        // Calculate incremental usage (handle counter resets)
-                        const rxDiff = totalRxBytes >= prev.lastRxTotal ? totalRxBytes - prev.lastRxTotal : 0;
-                        const txDiff = totalTxBytes >= prev.lastTxTotal ? totalTxBytes - prev.lastTxTotal : 0;
-
-                        const updated = {
-                            date: today,
-                            rx: prev.rx + rxDiff,
-                            tx: prev.tx + txDiff,
-                            lastRxTotal: totalRxBytes,
-                            lastTxTotal: totalTxBytes
-                        };
-
-                        localStorage.setItem('dailyNetworkUsage', JSON.stringify(updated));
-                        return updated;
-                    });
+                    const dailyUsage = await otelService.getDailyNetworkUsage();
+                    setDailyNetworkUsage(dailyUsage);
                 }
             } catch (error) {
                 console.error('Error fetching OTel metrics:', error);

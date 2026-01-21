@@ -45,7 +45,10 @@ std::vector<DetectedService> detectServices(
 
     // Detect services in Docker containers
     for (const auto& container : containers) {
-        if (container.state != "running") continue;
+        if (container.state != "running") {
+            // Logger::getInstance().debug("Skipping container {} (State: {})", container.name, container.state);
+            continue;
+        }
 
         // Detect service type from image or command
         std::string type = detectServiceType(container.image, container.command);

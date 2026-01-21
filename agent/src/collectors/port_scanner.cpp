@@ -72,8 +72,11 @@ bool PortScanner::parseSsOutput(const std::string& line, int& pid, int& port) {
     // LISTEN 0      511        127.0.0.1:5037      0.0.0.0:*    users:(("adb",pid=31829,fd=7))
     
     try {
-        // Extract port from local address (format: *:PORT or IP:PORT)
-        std::regex port_regex(R"([\*0-9\.]+:(\d+))");
+        // Extract port from local address (format: *:PORT, IP:PORT, or [IPv6]:PORT)
+        // Regex handles:
+        // 1. IPv6 with brackets: [::1]:8080
+        // 2. IPv4/Wildcard: 127.0.0.1:8080, *:8080, 0.0.0.0:8080
+        std::regex port_regex(R"((?:\[.*?\]|[\*0-9\.]+):(\d+))");
         std::smatch port_match;
         if (std::regex_search(line, port_match, port_regex)) {
             port = std::stoi(port_match[1].str());

@@ -53,6 +53,7 @@ services:
     volumes:
       - clickhouse_data:/var/lib/clickhouse
       - ./BACKEND/config/clickhouse-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./BACKEND/config/clickhouse_listen.xml:/etc/clickhouse-server/config.d/listen.xml:ro
     networks:
       - nexus-network
     healthcheck:

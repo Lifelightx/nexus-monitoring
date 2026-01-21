@@ -238,6 +238,30 @@ async function getServiceDetails(req, res) {
     }
 }
 
+/**
+ * Get daily network usage
+ * GET /api/otel/metrics/daily-usage
+ */
+async function getDailyNetworkUsage(req, res) {
+    try {
+        const { service } = req.query;
+
+        const usage = await otelQueryService.getDailyNetworkUsage(service);
+
+        res.json({
+            success: true,
+            data: usage
+        });
+    } catch (error) {
+        logger.error('Error fetching daily network usage:', error.message);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch daily network usage',
+            message: error.message
+        });
+    }
+}
+
 module.exports = {
     getLatestMetrics,
     getMetricTimeSeries,
@@ -245,5 +269,6 @@ module.exports = {
     getTraces,
     getTraceDetails,
     getServiceTopology,
-    getServiceDetails
+    getServiceDetails,
+    getDailyNetworkUsage
 };

@@ -37,12 +37,12 @@ inline json serializeServices(const std::vector<DetectedService>& services) {
     json result = json::array();
     
     for (const auto& svc : services) {
-        result.push_back({
+        result.push_back(json{
             {"name", svc.name},
             {"type", svc.type},
             {"port", svc.port},
             {"pid", svc.pid},
-            {"containerId", svc.containerId.empty() ? nullptr : svc.containerId},
+            {"containerId", svc.containerId.empty() ? json(nullptr) : json(svc.containerId)},
             {"status", svc.status}
         });
     }

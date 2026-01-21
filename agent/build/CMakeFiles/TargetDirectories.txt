@@ -1,7 +1,0 @@
-/home/jeebanjyoti.mallik@apmosys.mahape/nexus-monitoring/agent/build/CMakeFiles/nexus-agent.dir
-/home/jeebanjyoti.mallik@apmosys.mahape/nexus-monitoring/agent/build/CMakeFiles/edit_cache.dir
-/home/jeebanjyoti.mallik@apmosys.mahape/nexus-monitoring/agent/build/CMakeFiles/rebuild_cache.dir
-/home/jeebanjyoti.mallik@apmosys.mahape/nexus-monitoring/agent/build/CMakeFiles/list_install_components.dir
-/home/jeebanjyoti.mallik@apmosys.mahape/nexus-monitoring/agent/build/CMakeFiles/install.dir
-/home/jeebanjyoti.mallik@apmosys.mahape/nexus-monitoring/agent/build/CMakeFiles/install/local.dir
-/home/jeebanjyoti.mallik@apmosys.mahape/nexus-monitoring/agent/build/CMakeFiles/install/strip.dir

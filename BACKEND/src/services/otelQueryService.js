@@ -176,6 +176,61 @@ class OTelQueryService {
 
         return [];
     }
+
+    /**
+     * Get daily network usage
+     */
+    async getDailyNetworkUsage(service) {
+        const now = new Date();
+        const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const secondsSinceMidnight = Math.floor((now - midnight) / 1000);
+
+        // Return 0 if it's just after midnight (prevent query errors or empty results)
+        if (secondsSinceMidnight < 10) {
+            return {
+                date: now.toDateString(),
+                rx: 0,
+                tx: 0
+            };
+        }
+
+        try {
+            const queryPart = service ? `{service_name="${service}"}` : `{device!~"lo|docker.*|br-.*|veth.*|tun.*"}`;
+            // Sum by direction (receive/transmit)
+            const query = `sum by (direction) (increase(system_network_io_bytes${queryPart}[${secondsSinceMidnight}s]))`;
+
+            const data = await this.queryVM(query);
+
+            let rx = 0;
+            let tx = 0;
+
+            if (data.status === 'success' && data.data.result) {
+                data.data.result.forEach(r => {
+                    const dir = r.metric.direction;
+                    const val = parseFloat(r.value[1]);
+                    // Check for NaN or weird values
+                    if (!isNaN(val)) {
+                        if (dir === 'receive') rx += val;
+                        if (dir === 'transmit') tx += val;
+                    }
+                });
+            }
+
+            return {
+                date: now.toDateString(),
+                rx,
+                tx
+            };
+        } catch (error) {
+            logger.error('Failed to get daily network usage:', error.message);
+            return {
+                date: now.toDateString(),
+                rx: 0,
+                tx: 0,
+                error: error.message
+            };
+        }
+    }
 }
 
 module.exports = new OTelQueryService();
