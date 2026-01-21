@@ -5,6 +5,20 @@ const emailService = require('../services/emailService');
 const { protect: authMiddleware } = require('../middleware/authMiddleware');
 
 // Get alert settings
+/**
+ * @swagger
+ * /api/alerts/settings:
+ *   get:
+ *     summary: Get alert settings
+ *     tags: [Alert Settings]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Alert settings
+ *       500:
+ *         description: Server error
+ */
 router.get('/', authMiddleware, async (req, res) => {
     try {
         const settings = await AlertSettings.getSettings();
@@ -23,6 +37,43 @@ router.get('/', authMiddleware, async (req, res) => {
 });
 
 // Update alert settings
+/**
+ * @swagger
+ * /api/alerts/settings:
+ *   put:
+ *     summary: Update alert settings
+ *     tags: [Alert Settings]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               emailProvider:
+ *                 type: string
+ *               emailConfig:
+ *                 type: object
+ *               recipientEmails:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *               thresholds:
+ *                 type: object
+ *               enabledAlerts:
+ *                 type: object
+ *               emailEnabled:
+ *                 type: boolean
+ *               alertDeduplicationWindow:
+ *                 type: integer
+ *     responses:
+ *       200:
+ *         description: Settings updated
+ *       500:
+ *         description: Server error
+ */
 router.put('/', authMiddleware, async (req, res) => {
     try {
         const updates = req.body;
@@ -84,6 +135,33 @@ router.put('/', authMiddleware, async (req, res) => {
 });
 
 // Test email configuration
+/**
+ * @swagger
+ * /api/alerts/settings/test-email:
+ *   post:
+ *     summary: Test email configuration
+ *     tags: [Alert Settings]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - testEmail
+ *             properties:
+ *               testEmail:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Test email sent
+ *       400:
+ *         description: Missing email or config
+ *       500:
+ *         description: Server error
+ */
 router.post('/test-email', authMiddleware, async (req, res) => {
     try {
         const { testEmail } = req.body;
@@ -126,6 +204,33 @@ router.post('/test-email', authMiddleware, async (req, res) => {
 });
 
 // Add recipient email
+/**
+ * @swagger
+ * /api/alerts/settings/recipients:
+ *   post:
+ *     summary: Add recipient email
+ *     tags: [Alert Settings]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Email added
+ *       400:
+ *         description: Invalid or duplicate email
+ *       500:
+ *         description: Server error
+ */
 router.post('/recipients', authMiddleware, async (req, res) => {
     try {
         const { email } = req.body;
@@ -151,6 +256,27 @@ router.post('/recipients', authMiddleware, async (req, res) => {
 });
 
 // Remove recipient email
+/**
+ * @swagger
+ * /api/alerts/settings/recipients/{email}:
+ *   delete:
+ *     summary: Remove recipient email
+ *     tags: [Alert Settings]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: email
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: Email to remove
+ *     responses:
+ *       200:
+ *         description: Email removed
+ *       500:
+ *         description: Server error
+ */
 router.delete('/recipients/:email', authMiddleware, async (req, res) => {
     try {
         const { email } = req.params;

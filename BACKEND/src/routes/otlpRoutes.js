@@ -9,15 +9,55 @@ const otlpIngestController = require('../controllers/otlpIngestController');
  */
 
 // Health check
+/**
+ * @swagger
+ * /v1/health:
+ *   get:
+ *     summary: OTLP Health check
+ *     tags: [OTLP Ingest]
+ *     responses:
+ *       200:
+ *         description: Health status
+ */
 router.get('/health', otlpIngestController.healthCheck);
 
 // OTLP Traces endpoint
+/**
+ * @swagger
+ * /v1/traces:
+ *   post:
+ *     summary: Ingest OTLP traces
+ *     tags: [OTLP Ingest]
+ *     responses:
+ *       200:
+ *         description: Traces ingested
+ */
 router.post('/traces', otlpIngestController.ingestTraces);
 
 // OTLP Metrics endpoint
+/**
+ * @swagger
+ * /v1/metrics:
+ *   post:
+ *     summary: Ingest OTLP metrics
+ *     tags: [OTLP Ingest]
+ *     responses:
+ *       200:
+ *         description: Metrics ingested
+ */
 router.post('/metrics', otlpIngestController.ingestMetrics);
 
 // OTLP Logs endpoint
+/**
+ * @swagger
+ * /v1/logs:
+ *   post:
+ *     summary: Ingest OTLP logs
+ *     tags: [OTLP Ingest]
+ *     responses:
+ *       200:
+ *         description: Logs ingested
+ */
 router.post('/logs', otlpIngestController.ingestLogs);
 
 module.exports = router;

@@ -5,6 +5,31 @@ const alertService = require('../services/alertService');
 const { protect: authMiddleware } = require('../middleware/authMiddleware');
 
 // Get recent alerts
+/**
+ * @swagger
+ * /api/alerts:
+ *   get:
+ *     summary: Get recent alerts
+ *     tags: [Alerts]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *         description: Number of alerts to return (default 50)
+ *       - in: query
+ *         name: acknowledged
+ *         schema:
+ *           type: boolean
+ *         description: Filter by acknowledgement status
+ *     responses:
+ *       200:
+ *         description: List of alerts
+ *       500:
+ *         description: Server error
+ */
 router.get('/', authMiddleware, async (req, res) => {
     try {
         const { limit = 50, acknowledged } = req.query;
@@ -28,6 +53,32 @@ router.get('/', authMiddleware, async (req, res) => {
 });
 
 // Get alerts for specific agent
+/**
+ * @swagger
+ * /api/alerts/agent/{agentId}:
+ *   get:
+ *     summary: Get alerts for valid agent
+ *     tags: [Alerts]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: agentId
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: ID of the agent
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *         description: Number of alerts to return
+ *     responses:
+ *       200:
+ *         description: List of agent alerts
+ *       500:
+ *         description: Server error
+ */
 router.get('/agent/:agentId', authMiddleware, async (req, res) => {
     try {
         const { agentId } = req.params;
@@ -46,6 +97,35 @@ router.get('/agent/:agentId', authMiddleware, async (req, res) => {
 });
 
 // Get alert statistics
+/**
+ * @swagger
+ * /api/alerts/stats:
+ *   get:
+ *     summary: Get alert statistics
+ *     tags: [Alerts]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Alert statistics
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 total:
+ *                   type: integer
+ *                 unacknowledged:
+ *                   type: integer
+ *                 critical:
+ *                   type: integer
+ *                 byType:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *       500:
+ *         description: Server error
+ */
 router.get('/stats', authMiddleware, async (req, res) => {
     try {
         const totalAlerts = await Alert.countDocuments();
@@ -69,6 +149,29 @@ router.get('/stats', authMiddleware, async (req, res) => {
 });
 
 // Acknowledge alert
+/**
+ * @swagger
+ * /api/alerts/{id}/acknowledge:
+ *   put:
+ *     summary: Acknowledge an alert
+ *     tags: [Alerts]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: Alert ID
+ *     responses:
+ *       200:
+ *         description: Alert acknowledged
+ *       404:
+ *         description: Alert not found
+ *       500:
+ *         description: Server error
+ */
 router.put('/:id/acknowledge', authMiddleware, async (req, res) => {
     try {
         const { id } = req.params;
@@ -88,6 +191,33 @@ router.put('/:id/acknowledge', authMiddleware, async (req, res) => {
 });
 
 // Acknowledge multiple alerts
+/**
+ * @swagger
+ * /api/alerts/acknowledge/bulk:
+ *   put:
+ *     summary: Acknowledge multiple alerts
+ *     tags: [Alerts]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - alertIds
+ *             properties:
+ *               alertIds:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *     responses:
+ *       200:
+ *         description: Alerts acknowledged
+ *       500:
+ *         description: Server error
+ */
 router.put('/acknowledge/bulk', authMiddleware, async (req, res) => {
     try {
         const { alertIds } = req.body;
@@ -110,6 +240,29 @@ router.put('/acknowledge/bulk', authMiddleware, async (req, res) => {
 });
 
 // Delete alert
+/**
+ * @swagger
+ * /api/alerts/{id}:
+ *   delete:
+ *     summary: Delete an alert
+ *     tags: [Alerts]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: Alert ID
+ *     responses:
+ *       200:
+ *         description: Alert deleted
+ *       404:
+ *         description: Alert not found
+ *       500:
+ *         description: Server error
+ */
 router.delete('/:id', authMiddleware, async (req, res) => {
     try {
         const { id } = req.params;
@@ -128,6 +281,29 @@ router.delete('/:id', authMiddleware, async (req, res) => {
 });
 
 // Cleanup old alerts
+/**
+ * @swagger
+ * /api/alerts/cleanup:
+ *   post:
+ *     summary: Cleanup old alerts
+ *     tags: [Alerts]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               daysToKeep:
+ *                 type: integer
+ *                 default: 30
+ *     responses:
+ *       200:
+ *         description: Cleanup completed
+ *       500:
+ *         description: Server error
+ */
 router.post('/cleanup', authMiddleware, async (req, res) => {
     try {
         const { daysToKeep = 30 } = req.body;

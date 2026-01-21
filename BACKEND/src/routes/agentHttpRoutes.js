@@ -9,6 +9,44 @@ const chalk = require('chalk');
 const { protect } = require('../middleware/authMiddleware');
 
 // Agent registration
+/**
+ * @swagger
+ * /api/agent/register:
+ *   post:
+ *     summary: Register a new agent
+ *     tags: [Agent (HTTP)]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               hostname:
+ *                 type: string
+ *               os:
+ *                 type: string
+ *               platform:
+ *                 type: string
+ *               arch:
+ *                 type: string
+ *               cpus:
+ *                 type: integer
+ *               totalMemory:
+ *                 type: integer
+ *               version:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Agent registered successfully
+ *       500:
+ *         description: Server error
+ */
+// Agent registration
 router.post('/register', protect, async (req, res) => {
     try {
         const { name, hostname, os, platform, arch, cpus, totalMemory, version } = req.body;
@@ -48,6 +86,46 @@ router.post('/register', protect, async (req, res) => {
     }
 });
 
+// Metrics submission
+/**
+ * @swagger
+ * /api/agent/metrics:
+ *   post:
+ *     summary: Submit agent metrics
+ *     tags: [Agent (HTTP)]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               agent:
+ *                 type: string
+ *               cpu:
+ *                 type: object
+ *               memory:
+ *                 type: object
+ *               disk:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *               network:
+ *                 type: object
+ *               docker:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *               uptime:
+ *                 type: number
+ *     responses:
+ *       200:
+ *         description: Metrics submitted successfully
+ *       500:
+ *         description: Server error
+ */
 // Metrics submission
 router.post('/metrics', protect, async (req, res) => {
     try {
@@ -173,6 +251,34 @@ router.post('/metrics', protect, async (req, res) => {
 });
 
 // Heartbeat
+/**
+ * @swagger
+ * /api/agent/heartbeat:
+ *   post:
+ *     summary: Send agent heartbeat
+ *     tags: [Agent (HTTP)]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - agentName
+ *             properties:
+ *               agentName:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Heartbeat received
+ *       404:
+ *         description: Agent not found
+ *       500:
+ *         description: Server error
+ */
+// Heartbeat
 router.post('/heartbeat', protect, async (req, res) => {
     try {
         const { agentName } = req.body;
@@ -202,6 +308,30 @@ router.post('/heartbeat', protect, async (req, res) => {
     }
 });
 
+// Get agent status
+/**
+ * @swagger
+ * /api/agent/status/{agentName}:
+ *   get:
+ *     summary: Get agent status
+ *     tags: [Agent (HTTP)]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: agentName
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: Name of the agent
+ *     responses:
+ *       200:
+ *         description: Agent status retrieved
+ *       404:
+ *         description: Agent not found
+ *       500:
+ *         description: Server error
+ */
 // Get agent status
 router.get('/status/:agentName', protect, async (req, res) => {
     try {
@@ -233,6 +363,39 @@ router.get('/status/:agentName', protect, async (req, res) => {
 
 // ✅ Command Polling Endpoints
 
+// GET /api/agent/commands/:agentName - Agent polls for pending commands
+/**
+ * @swagger
+ * /api/agent/commands/{agentName}:
+ *   get:
+ *     summary: Poll for pending commands
+ *     tags: [Agent (HTTP)]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: agentName
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: Name of the agent
+ *     responses:
+ *       200:
+ *         description: Pending command retrieved
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 command:
+ *                   type: object
+ *       404:
+ *         description: Agent not found
+ *       500:
+ *         description: Server error
+ */
 // GET /api/agent/commands/:agentName - Agent polls for pending commands
 router.get('/commands/:agentName', protect, async (req, res) => {
     try {
@@ -278,6 +441,42 @@ router.get('/commands/:agentName', protect, async (req, res) => {
     }
 });
 
+// POST /api/agent/commands/:commandId/result - Agent submits command result
+/**
+ * @swagger
+ * /api/agent/commands/{commandId}/result:
+ *   post:
+ *     summary: Submit command result
+ *     tags: [Agent (HTTP)]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: commandId
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: ID of the command
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - status
+ *             properties:
+ *               status:
+ *                 type: string
+ *                 enum: [completed, failed]
+ *               result:
+ *                 type: object
+ *     responses:
+ *       200:
+ *         description: Result processed successfully
+ *       500:
+ *         description: Server error
+ */
 // POST /api/agent/commands/:commandId/result - Agent submits command result
 router.post('/commands/:commandId/result', protect, async (req, res) => {
     try {
