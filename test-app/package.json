@@ -5,7 +5,7 @@
     "main": "server.js",
     "scripts": {
         "start": "node server.js",
-        "start:instrumented": "NODE_OPTIONS='--require ../agent/instrumentation/nodejs/index.js' INSTRUMENT_NODEJS=true SERVICE_NAME=nodejs-3001 SERVER_URL=http://localhost:3000 node server.js"
+        "start:instrumented": "NODE_OPTIONS='--require ../agent/assets/instrumentation/nodejs/index.js' INSTRUMENT_NODEJS=true SERVICE_NAME=nodejs-3001 SERVER_URL=http://localhost:3000 node server.js"
     },
     "dependencies": {
         "express": "^4.18.2",

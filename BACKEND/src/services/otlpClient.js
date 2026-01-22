@@ -1,5 +1,5 @@
 const axios = require('axios');
-
+const logger = require('../utils/logger');
 /**
  * OTLP HTTP Client
  * Sends OpenTelemetry data directly to OTel Collector via HTTP
@@ -20,7 +20,7 @@ async function sendTraces(tracesPayload) {
             timeout: 5000
         });
 
-        console.log(`[OTLP] ✅ Sent traces to collector:`, {
+        logger.info(`[OTLP] ✅ Sent traces to collector:`, {
             status: response.status
         });
 
@@ -44,7 +44,7 @@ async function sendMetrics(metricsPayload) {
             timeout: 5000
         });
 
-        console.log(`[OTLP] ✅ Sent metrics to collector`);
+        logger.info(`[OTLP] ✅ Sent metrics to collector`);
         return response.data;
     } catch (error) {
         console.error(`[OTLP] ❌ Failed to send metrics:`, error.message);
@@ -65,7 +65,7 @@ async function sendLogs(logsPayload) {
             timeout: 5000
         });
 
-        console.log(`[OTLP] ✅ Sent logs to collector`);
+        logger.info(`[OTLP] ✅ Sent logs to collector`);
         return response.data;
     } catch (error) {
         console.error(`[OTLP] ❌ Failed to send logs:`, error.message);

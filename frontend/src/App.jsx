@@ -3,12 +3,12 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useParam
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { SocketProvider } from './context/SocketContext';
-import Navbar from './components/Navbar';
-import Hero from './components/Hero';
-import Features from './components/Features';
-import Services from './components/Services';
 import Footer from './components/Footer';
 import Login from './pages/auth/Login';
+import LandingPage from './pages/LandingPage';
+import ServicesPage from './pages/ServicesPage';
+import PricingPage from './pages/PricingPage';
+import DocumentationPage from './pages/DocumentationPage';
 import Signup from './pages/auth/Signup';
 import DockerDetails from './pages/docker/DockerDetails';
 import DockerImageDetails from './pages/docker/DockerImageDetails';
@@ -45,18 +45,7 @@ const ProtectedRoute = ({ children }) => {
   return children;
 };
 
-// Landing Page Component
-const LandingPage = () => (
-  <>
-    <Navbar />
-    <main>
-      <Hero />
-      <Features />
-      <Services />
-    </main>
-    <Footer />
-  </>
-);
+
 
 // Docker Details Wrapper to handle location state and params
 const DockerDetailsWrapper = () => {
@@ -115,6 +104,9 @@ function App() {
               <Routes>
                 {/* Public Routes */}
                 <Route path="/" element={<LandingPage />} />
+                <Route path="/services" element={<ServicesPage />} />
+                <Route path="/pricing" element={<PricingPage />} />
+                <Route path="/docs" element={<DocumentationPage />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/signup" element={<Signup />} />
 

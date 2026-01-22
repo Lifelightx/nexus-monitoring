@@ -1,5 +1,5 @@
 const otlpClient = require('../services/otlpClient');
-
+const logger = require('../utils/logger');
 /**
  * OTLP Ingest Controller
  * Receives OpenTelemetry Protocol (OTLP) data and forwards to OTel Collector
@@ -21,7 +21,7 @@ async function ingestTraces(req, res) {
             });
         }
 
-        console.log(`[OTLP Ingest] Received traces:`, {
+        logger.info(`[OTLP Ingest] Received traces:`, {
             resourceSpansCount: tracesPayload.resourceSpans?.length || 0
         });
 
@@ -57,7 +57,7 @@ async function ingestMetrics(req, res) {
             });
         }
 
-        console.log(`[OTLP Ingest] Received metrics:`, {
+        logger.info(`[OTLP Ingest] Received metrics:`, {
             resourceMetricsCount: metricsPayload.resourceMetrics?.length || 0
         });
 
@@ -93,7 +93,7 @@ async function ingestLogs(req, res) {
             });
         }
 
-        console.log(`[OTLP Ingest] Received logs:`, {
+        logger.info(`[OTLP Ingest] Received logs:`, {
             resourceLogsCount: logsPayload.resourceLogs?.length || 0
         });
 
