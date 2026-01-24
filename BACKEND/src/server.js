@@ -69,7 +69,7 @@ app.use('/api/metrics', require('./routes/metricRoutes'));
 app.use('/api/deploy', require('./routes/deployRoutes'));
 app.use('/api', require('./routes/services')); // APM service routes
 // OTLP Ingest routes (OpenTelemetry Protocol)
-app.use('/v1', require('./routes/otlpRoutes'));
+app.use('/api/otlp/v1', require('./routes/otlpRoutes'));
 // IMPORTANT: Register settings routes BEFORE alert routes to prevent path conflicts
 app.use('/api/alerts/settings', require('./routes/alertSettingsRoutes'));
 app.use('/api/alerts', require('./routes/alertRoutes'));

@@ -1,7 +1,7 @@
 const shimmer = require('../utils/shimmer');
 const Module = require('module');
 const { getTraceContext, addSpan } = require('../context');
-const { generateSpanId, createDbSpan } = require('../tracer');
+const { generateSpanId, createOTLPDbSpan } = require('../tracer');
 
 let isInstrumented = false;
 
@@ -42,7 +42,7 @@ function wrapMongooseModel(mongoose) {
                             const endTime = new Date();
                             const durationMs = endTime - startTime;
 
-                            const span = createDbSpan({
+                            const span = createOTLPDbSpan({
                                 spanId,
                                 traceId: context.traceId,
                                 parentSpanId: context.spanId,
@@ -63,7 +63,7 @@ function wrapMongooseModel(mongoose) {
                             const endTime = new Date();
                             const durationMs = endTime - startTime;
 
-                            const span = createDbSpan({
+                            const span = createOTLPDbSpan({
                                 spanId,
                                 traceId: context.traceId,
                                 parentSpanId: context.spanId,
@@ -77,8 +77,21 @@ function wrapMongooseModel(mongoose) {
                                 endTime
                             });
 
-                            span.metadata.error = true;
-                            span.metadata.error_message = err.message;
+                            // Mark as error in OTLP
+                            span.status = {
+                                code: 2, // STATUS_CODE_ERROR
+                                message: err.message
+                            };
+
+                            if (!span.attributes) span.attributes = [];
+                            span.attributes.push({
+                                key: 'error',
+                                value: { boolValue: true }
+                            });
+                            span.attributes.push({
+                                key: 'error.message',
+                                value: { stringValue: err.message }
+                            });
 
                             addSpan(span);
                             throw err;
@@ -116,7 +129,7 @@ function wrapMongooseModel(mongoose) {
                                 const endTime = new Date();
                                 const durationMs = endTime - startTime;
 
-                                const span = createDbSpan({
+                                const span = createOTLPDbSpan({
                                     spanId,
                                     traceId: context.traceId,
                                     parentSpanId: context.spanId,
@@ -137,7 +150,7 @@ function wrapMongooseModel(mongoose) {
                                 const endTime = new Date();
                                 const durationMs = endTime - startTime;
 
-                                const span = createDbSpan({
+                                const span = createOTLPDbSpan({
                                     spanId,
                                     traceId: context.traceId,
                                     parentSpanId: context.spanId,
@@ -151,8 +164,21 @@ function wrapMongooseModel(mongoose) {
                                     endTime
                                 });
 
-                                span.metadata.error = true;
-                                span.metadata.error_message = err.message;
+                                // Mark as error
+                                span.status = {
+                                    code: 2,
+                                    message: err.message
+                                };
+
+                                if (!span.attributes) span.attributes = [];
+                                span.attributes.push({
+                                    key: 'error',
+                                    value: { boolValue: true }
+                                });
+                                span.attributes.push({
+                                    key: 'error.message',
+                                    value: { stringValue: err.message }
+                                });
 
                                 addSpan(span);
                                 throw err;
@@ -166,7 +192,7 @@ function wrapMongooseModel(mongoose) {
         }
     });
 
-    console.log('[APM] Mongoose instrumentation enabled');
+    console.log('[APM] Mongoose instrumentation enabled (OTLP)');
 }
 
 /**

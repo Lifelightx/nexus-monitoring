@@ -134,7 +134,11 @@ const ServerOverview = () => {
                     </h3>
                     {(() => {
                         const networks = Object.values(formattedMetrics.network);
-                        const totalRx = networks.reduce((sum, net) => sum + (net.rx_sec || 0), 0);
+                        // Filter out internal interfaces
+                        const externalNetworks = networks.filter(net =>
+                            !net.device.match(/^(lo|docker|br-|veth|tun)/)
+                        );
+                        const totalRx = externalNetworks.reduce((sum, net) => sum + (net.rx_sec || 0), 0);
                         const formatSpeed = (bytesPerSec) => {
                             const kbps = bytesPerSec / 1024;
                             return kbps >= 1024
@@ -168,7 +172,11 @@ const ServerOverview = () => {
                     </h3>
                     {(() => {
                         const networks = Object.values(formattedMetrics.network);
-                        const totalTx = networks.reduce((sum, net) => sum + (net.tx_sec || 0), 0);
+                        // Filter out internal interfaces
+                        const externalNetworks = networks.filter(net =>
+                            !net.device.match(/^(lo|docker|br-|veth|tun)/)
+                        );
+                        const totalTx = externalNetworks.reduce((sum, net) => sum + (net.tx_sec || 0), 0);
                         const formatSpeed = (bytesPerSec) => {
                             const kbps = bytesPerSec / 1024;
                             return kbps >= 1024

@@ -93,7 +93,7 @@ bool HttpAgentClient::sendLogs(const json& logs) {
 bool HttpAgentClient::sendOTLPMetrics(const json& otlpMetrics) {
     try {
         // Send to backend's OTLP endpoint
-        auto response = httpPost("/v1/metrics", otlpMetrics);
+        auto response = httpPost("/api/otlp/v1/metrics", otlpMetrics);
         return response.contains("success") && response["success"].get<bool>();
     } catch (const std::exception& e) {
         nexus::Logger::getInstance().error("Failed to send OTLP metrics: {}", e.what());

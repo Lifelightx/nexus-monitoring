@@ -1,22 +1,222 @@
-const { randomUUID } = require('crypto');
+const { randomBytes } = require('crypto');
 
 /**
- * Generate unique trace ID
+ * Generate OTLP-compliant trace ID (32 hex characters / 16 bytes)
+ * OTLP requires trace IDs as hex strings
  */
 function generateTraceId() {
-    return randomUUID();
+    return randomBytes(16).toString('hex');
 }
 
 /**
- * Generate unique span ID
+ * Generate OTLP-compliant span ID (16 hex characters / 8 bytes)
+ * OTLP requires span IDs as hex strings
  */
 function generateSpanId() {
-    return randomUUID();
+    return randomBytes(8).toString('hex');
 }
 
 /**
- * Create trace object
+ * Convert nanoseconds timestamp from Date
+ * OTLP uses nanoseconds since epoch
  */
+function dateToNanos(date) {
+    const millis = date.getTime();
+    return (BigInt(millis) * BigInt(1000000)).toString();
+}
+
+/**
+ * Create OTLP Attribute
+ */
+function createAttribute(key, value) {
+    if (typeof value === 'string') {
+        return { key, value: { stringValue: value } };
+    } else if (typeof value === 'number') {
+        if (Number.isInteger(value)) {
+            return { key, value: { intValue: value.toString() } };
+        }
+        return { key, value: { doubleValue: value } };
+    } else if (typeof value === 'boolean') {
+        return { key, value: { boolValue: value } };
+    }
+    return { key, value: { stringValue: String(value) } };
+}
+
+/**
+ * Convert HTTP status code to OTLP span status
+ */
+function getSpanStatus(statusCode) {
+    if (statusCode >= 500) {
+        return {
+            code: 2, // STATUS_CODE_ERROR
+            message: `HTTP ${statusCode}`
+        };
+    } else if (statusCode >= 400) {
+        return {
+            code: 2, // STATUS_CODE_ERROR  
+            message: `HTTP ${statusCode}`
+        };
+    }
+    return {
+        code: 1 // STATUS_CODE_OK
+    };
+}
+
+/**
+ * Create OTLP HTTP span
+ */
+function createOTLPHttpSpan({
+    spanId,
+    traceId,
+    parentSpanId = null,
+    method,
+    url,
+    statusCode,
+    durationMs,
+    startTime,
+    endTime
+}) {
+    const attributes = [
+        createAttribute('http.method', method),
+        createAttribute('http.url', url),
+        createAttribute('http.status_code', statusCode),
+        createAttribute('http.target', url),
+        createAttribute('http.scheme', url.startsWith('https') ? 'https' : 'http')
+    ];
+
+    if (statusCode >= 400) {
+        attributes.push(createAttribute('error', true));
+    }
+
+    const span = {
+        traceId: traceId,
+        spanId: spanId,
+        name: `${method} ${url}`,
+        kind: 2, // SPAN_KIND_SERVER
+        startTimeUnixNano: dateToNanos(startTime),
+        endTimeUnixNano: dateToNanos(endTime),
+        attributes: attributes,
+        status: getSpanStatus(statusCode)
+    };
+
+    if (parentSpanId) {
+        span.parentSpanId = parentSpanId;
+    }
+
+    return span;
+}
+
+/**
+ * Create OTLP DB span
+ */
+function createOTLPDbSpan({
+    spanId,
+    traceId,
+    parentSpanId,
+    dbType,
+    operation,
+    collection,
+    table,
+    query,
+    durationMs,
+    startTime,
+    endTime
+}) {
+    const attributes = [
+        createAttribute('db.system', dbType),
+        createAttribute('db.operation', operation),
+        createAttribute('db.statement', sanitizeQuery(query))
+    ];
+
+    if (collection) {
+        attributes.push(createAttribute('db.mongodb.collection', collection));
+    }
+    if (table) {
+        attributes.push(createAttribute('db.sql.table', table));
+    }
+
+    const span = {
+        traceId: traceId,
+        spanId: spanId,
+        parentSpanId: parentSpanId,
+        name: `${dbType}: ${operation} ${collection || table}`,
+        kind: 3, // SPAN_KIND_CLIENT
+        startTimeUnixNano: dateToNanos(startTime),
+        endTimeUnixNano: dateToNanos(endTime),
+        attributes: attributes,
+        status: { code: 1 } // STATUS_CODE_OK
+    };
+
+    return span;
+}
+
+/**
+ * Create OTLP External HTTP span
+ */
+function createOTLPExternalSpan({
+    spanId,
+    traceId,
+    parentSpanId,
+    host,
+    method,
+    url,
+    statusCode,
+    durationMs,
+    startTime,
+    endTime
+}) {
+    const attributes = [
+        createAttribute('http.method', method),
+        createAttribute('http.url', url),
+        createAttribute('http.status_code', statusCode),
+        createAttribute('net.peer.name', host),
+        createAttribute('span.kind', 'client')
+    ];
+
+    if (statusCode >= 400) {
+        attributes.push(createAttribute('error', true));
+    }
+
+    const span = {
+        traceId: traceId,
+        spanId: spanId,
+        parentSpanId: parentSpanId,
+        name: `${method} ${host}`,
+        kind: 3, // SPAN_KIND_CLIENT
+        startTimeUnixNano: dateToNanos(startTime),
+        endTimeUnixNano: dateToNanos(endTime),
+        attributes: attributes,
+        status: getSpanStatus(statusCode)
+    };
+
+    return span;
+}
+
+/**
+ * Sanitize query for storage
+ */
+function sanitizeQuery(query) {
+    if (!query) return '';
+
+    let sanitized = String(query);
+
+    // Limit length
+    if (sanitized.length > 1000) {
+        sanitized = sanitized.substring(0, 1000) + '...';
+    }
+
+    // Remove sensitive data patterns
+    sanitized = sanitized.replace(/password\s*=\s*['""][^'""]*['"]/gi, 'password=***');
+    sanitized = sanitized.replace(/token\s*=\s*['""][^'""]*['"]/gi, 'token=***');
+
+    return sanitized;
+}
+
+/**
+ * Legacy functions for backward compatibility
+ * These create the old custom format but will be deprecated
+ */
+
 function createTrace({
     traceId,
     serviceName,
@@ -43,9 +243,6 @@ function createTrace({
     };
 }
 
-/**
- * Create HTTP span
- */
 function createHttpSpan({
     spanId,
     traceId,
@@ -75,9 +272,6 @@ function createHttpSpan({
     };
 }
 
-/**
- * Create DB span
- */
 function createDbSpan({
     spanId,
     traceId,
@@ -110,9 +304,6 @@ function createDbSpan({
     };
 }
 
-/**
- * Create external HTTP span
- */
 function createExternalSpan({
     spanId,
     traceId,
@@ -144,29 +335,17 @@ function createExternalSpan({
     };
 }
 
-/**
- * Sanitize query for storage
- */
-function sanitizeQuery(query) {
-    if (!query) return '';
-
-    let sanitized = String(query);
-
-    // Limit length
-    if (sanitized.length > 1000) {
-        sanitized = sanitized.substring(0, 1000) + '...';
-    }
-
-    // Remove sensitive data patterns
-    sanitized = sanitized.replace(/password\s*=\s*['"][^'"]*['"]/gi, 'password=***');
-    sanitized = sanitized.replace(/token\s*=\s*['"][^'"]*['"]/gi, 'token=***');
-
-    return sanitized;
-}
-
 module.exports = {
+    // OTLP-compliant functions
     generateTraceId,
     generateSpanId,
+    createOTLPHttpSpan,
+    createOTLPDbSpan,
+    createOTLPExternalSpan,
+    createAttribute,
+    dateToNanos,
+
+    // Legacy functions (backward compatibility)
     createTrace,
     createHttpSpan,
     createDbSpan,

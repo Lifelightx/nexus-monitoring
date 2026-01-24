@@ -8,18 +8,8 @@ const otlpIngestController = require('../controllers/otlpIngestController');
  * and forward it to Kafka for processing
  */
 
-// Health check
-/**
- * @swagger
- * /v1/health:
- *   get:
- *     summary: OTLP Health check
- *     tags: [OTLP Ingest]
- *     responses:
- *       200:
- *         description: Health status
- */
-router.get('/health', otlpIngestController.healthCheck);
+// Health check removed - not implemented in OTLP controller
+// Use backend health check instead
 
 // OTLP Traces endpoint
 /**

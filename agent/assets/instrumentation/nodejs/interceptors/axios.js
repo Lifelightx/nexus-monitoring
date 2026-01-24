@@ -1,6 +1,7 @@
 const shimmer = require('../utils/shimmer');
 const { getTraceContext, addSpan } = require('../context');
-const { generateSpanId, createExternalSpan } = require('../tracer');
+const { generateSpanId, createOTLPExternalSpan } = require('../tracer');
+const { generateTraceparent } = require('./http');
 
 /**
  * Instrument Axios
@@ -17,6 +18,16 @@ function instrumentAxios() {
                     config._apmStartTime = Date.now();
                     config._apmSpanId = generateSpanId();
                     config._apmContext = context;
+
+                    // Add W3C Trace Context header for distributed tracing
+                    const traceparent = generateTraceparent(
+                        context.traceId,
+                        config._apmSpanId,
+                        true // sampled
+                    );
+                    config.headers['traceparent'] = traceparent;
+
+                    console.log(`[APM] Propagating trace ${context.traceId.substring(0, 8)}... via axios request to ${config.url}`);
                 }
                 return config;
             },
@@ -33,7 +44,7 @@ function instrumentAxios() {
 
                     const url = new URL(config.url, config.baseURL || 'http://localhost');
 
-                    const span = createExternalSpan({
+                    const span = createOTLPExternalSpan({
                         spanId: config._apmSpanId,
                         traceId: config._apmContext.traceId,
                         parentSpanId: config._apmContext.spanId,
@@ -58,7 +69,7 @@ function instrumentAxios() {
 
                     const url = new URL(config.url, config.baseURL || 'http://localhost');
 
-                    const span = createExternalSpan({
+                    const span = createOTLPExternalSpan({
                         spanId: config._apmSpanId,
                         traceId: config._apmContext.traceId,
                         parentSpanId: config._apmContext.spanId,
@@ -71,8 +82,18 @@ function instrumentAxios() {
                         endTime: new Date(endTime)
                     });
 
-                    span.metadata.error = true;
-                    span.metadata.error_message = error.message;
+                    // Mark as error in OTLP span
+                    span.status = {
+                        code: 2, // STATUS_CODE_ERROR
+                        message: error.message
+                    };
+
+                    // Add error attribute
+                    if (!span.attributes) span.attributes = [];
+                    span.attributes.push({
+                        key: 'error.message',
+                        value: { stringValue: error.message }
+                    });
 
                     addSpan(span);
                 }
@@ -80,7 +101,7 @@ function instrumentAxios() {
             }
         );
 
-        console.log('[APM] Axios instrumentation enabled');
+        console.log('[APM] Axios instrumentation enabled (OTLP + W3C Trace Context)');
     } catch (err) {
         console.log('[APM] Axios not installed, skipping instrumentation');
     }
