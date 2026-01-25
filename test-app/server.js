@@ -283,6 +283,26 @@ app.get('/api/timeout', async (req, res) => {
 });
 
 /**
+ * GET /api/distributed - Distributed tracing demo
+ * Calls Worker Service (Service B)
+ */
+app.get('/api/distributed', async (req, res) => {
+    try {
+        console.log('Calling worker service...');
+        // This outgoing HTTP call should be auto-instrumented by OTel
+        const response = await axios.get('http://localhost:3002/process');
+
+        res.json({
+            message: 'Distributed transaction complete',
+            workerResponse: response.data
+        });
+    } catch (error) {
+        console.error('Distributed call failed:', error.message);
+        res.status(502).json({ error: 'Worker service unavailable' });
+    }
+});
+
+/**
  * GET /api/exception - Throws exception
  */
 app.get('/api/exception', async (req, res, next) => {

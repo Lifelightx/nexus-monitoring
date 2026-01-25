@@ -48,7 +48,8 @@ class ClickHouseClient {
                 duration_ms: trace.duration_ms,
                 status_code: trace.status_code,
                 error: trace.error ? 1 : 0,
-                timestamp: Math.floor(new Date(trace.timestamp).getTime() / 1000),
+                // DateTime64(3) expects milliseconds or string. Sending number = ticks (ms)
+                timestamp: new Date(trace.timestamp).getTime(),
                 agent_id: trace.metadata?.agent_id || '',
                 span_count: trace.spans?.length || 0
             }));
@@ -82,8 +83,14 @@ class ClickHouseClient {
                     service_name: span.service_name || '',
                     span_name: span.name,
                     span_kind: span.span_kind || 0,
-                    start_time: Math.floor(new Date(span.start_time).getTime() / 1000),
-                    end_time: Math.floor(new Date(span.end_time).getTime() / 1000),
+                    // DateTime64(9) - sending milliseconds * 1,000,000 to get nanoseconds ticks
+                    // BUT JS Max Safe Integer is 2^53. 
+                    // Current epoch ms ~ 1.7e12. * 1e6 = 1.7e18. Max Safe is 9e15. 
+                    // So we cannot pass nanosecond ticks as JS number. 
+                    // We must pass as String 'YYYY-MM-DD HH:mm:ss.SSSSSSSSS' or standard ISO.
+                    // ClickHouse parses ISO string well.
+                    start_time: new Date(span.start_time).toISOString(),
+                    end_time: new Date(span.end_time).toISOString(),
                     duration_ms: span.duration_ms,
                     status_code: span.status_code || 0,
                     status_message: span.status_message || '',
@@ -176,12 +183,16 @@ class ClickHouseClient {
     /**
      * Get list of services
      */
+    /**
+     * Get list of services
+     */
     async getServices() {
+        // Query Standard OTel Table
         const query = `
-            SELECT DISTINCT service_name
-            FROM otel.traces
-            WHERE service_name != ''
-            ORDER BY service_name
+            SELECT DISTINCT ServiceName as service_name
+            FROM otel.otel_traces
+            WHERE ServiceName != ''
+            ORDER BY ServiceName
         `;
 
         return await this.query(query);
@@ -191,37 +202,41 @@ class ClickHouseClient {
      * Get traces
      */
     async getTraces({ serviceName, startTime, endTime, limit = 50, minDuration, maxDuration }) {
+        // Standard OTel: Query otel.otel_traces
+        // Select spans that are likely roots (server kind or no parent)
+        // Note: Timestamp is DateTime64(9), Duration is Int64 (nanoseconds)
         let query = `
             SELECT 
-                trace_id,
-                service_name,
-                endpoint,
-                timestamp as start_time,
-                duration_ms,
-                status_code,
-                error,
-                span_count
-            FROM otel.traces
+                TraceId as trace_id,
+                ServiceName as service_name,
+                SpanName as endpoint,
+                Timestamp as start_time,
+                CAST(Duration / 1000000 AS Float64) as duration_ms,
+                StatusMessage as status_message,
+                StatusCode as status_code,
+                count() OVER (PARTITION BY TraceId) as span_count
+            FROM otel.otel_traces
             WHERE 1=1
+            AND (ParentSpanId = '' OR SpanKind = 'SPAN_KIND_SERVER')
         `;
 
         if (serviceName) {
-            query += ` AND service_name = '${serviceName}'`;
+            query += ` AND ServiceName = '${serviceName}'`;
         }
         if (startTime) {
-            query += ` AND timestamp >= '${startTime}'`;
+            query += ` AND Timestamp >= '${startTime}'`;
         }
         if (endTime) {
-            query += ` AND timestamp <= '${endTime}'`;
+            query += ` AND Timestamp <= '${endTime}'`;
         }
         if (minDuration) {
-            query += ` AND duration_ms >= ${minDuration}`;
+            query += ` AND Duration >= ${minDuration * 1000000}`; // ms to ns
         }
         if (maxDuration) {
-            query += ` AND duration_ms <= ${maxDuration}`;
+            query += ` AND Duration <= ${maxDuration * 1000000}`;
         }
 
-        query += ` ORDER BY timestamp DESC LIMIT ${limit}`;
+        query += ` ORDER BY Timestamp DESC LIMIT ${limit}`;
 
         return await this.query(query);
     }
@@ -230,11 +245,24 @@ class ClickHouseClient {
      * Get trace details (all spans for a trace)
      */
     async getTraceDetails(traceId) {
+        // Standard OTel: Query otel.otel_traces
         const query = `
-            SELECT *
-            FROM otel.spans
-            WHERE trace_id = '${traceId}'
-            ORDER BY start_time
+            SELECT 
+                TraceId as trace_id,
+                SpanId as span_id,
+                ParentSpanId as parent_span_id,
+                ServiceName as service_name,
+                SpanName as span_name,
+                SpanKind as span_kind,
+                Timestamp as start_time,
+                Timestamp as end_time, -- Approximated if not available, usually calc start+duration
+                CAST(Duration / 1000000 AS Float64) as duration_ms,
+                StatusCode as status_code,
+                StatusMessage as status_message,
+                SpanAttributes as attributes
+            FROM otel.otel_traces
+            WHERE TraceId = '${traceId}'
+            ORDER BY Timestamp
         `;
 
         return await this.query(query);
@@ -242,67 +270,45 @@ class ClickHouseClient {
 
     /**
      * Get service topology
+     * (Placeholder - requires complex join or materialized view support on otel table)
      */
     async getServiceTopology({ startTime, endTime }) {
-        let query = `
-            SELECT 
-                source_service,
-                target_service,
-                sum(call_count) as total_calls,
-                sum(error_count) as total_errors,
-                avg(total_duration_ms) as avg_duration
-            FROM otel.service_topology
-            WHERE 1=1
-        `;
-
-        if (startTime) {
-            query += ` AND timestamp >= '${startTime}'`;
-        }
-        if (endTime) {
-            query += ` AND timestamp <= '${endTime}'`;
-        }
-
-        query += `
-            GROUP BY source_service, target_service
-            HAVING total_calls > 0
-            ORDER BY total_calls DESC
-        `;
-
-        return await this.query(query);
+        return [];
     }
 
     /**
      * Get service stats
      */
-    async getServiceStats({ serviceName, startTime, endTime }) {
+    async getServiceStats({ serviceName, startTime, endTime, agentId }) {
+        // Standard OTel: Aggregation on otel.otel_traces
+        // Focusing on Server Kind spans
         let query = `
             SELECT 
-                service_name,
-                endpoint,
-                toDateTime(timestamp) as hour,
-                sum(request_count) as total_requests,
-                sum(error_count) as total_errors,
-                avg(avg_duration_ms) as avg_duration,
-                avg(p50_duration_ms) as p50,
-                avg(p95_duration_ms) as p95,
-                avg(p99_duration_ms) as p99
-            FROM otel.service_stats_mv
-            WHERE 1=1
+                ServiceName as service_name,
+                count() as request_count,
+                countIf(StatusCode = 'STATUS_CODE_ERROR') as error_count,
+                avg(Duration / 1000000) as avg_duration,
+                quantile(0.95)(Duration / 1000000) as p95,
+                count() / (toUnixTimestamp(now()) - toUnixTimestamp(toDateTime('${startTime || 'now() - INTERVAL 1 HOUR'}'))) as rps
+            FROM otel.otel_traces
+            WHERE SpanKind = 'SPAN_KIND_SERVER'
         `;
 
         if (serviceName) {
-            query += ` AND service_name = '${serviceName}'`;
+            query += ` AND ServiceName = '${serviceName}'`;
         }
         if (startTime) {
-            query += ` AND timestamp >= '${startTime}'`;
+            query += ` AND Timestamp >= '${startTime}'`;
         }
         if (endTime) {
-            query += ` AND timestamp <= '${endTime}'`;
+            query += ` AND Timestamp <= '${endTime}'`;
+        } else {
+            query += ` AND Timestamp >= now() - INTERVAL 1 HOUR`;
         }
 
         query += `
-            GROUP BY service_name, endpoint, hour
-            ORDER BY hour DESC
+            GROUP BY ServiceName
+            ORDER BY request_count DESC
         `;
 
         return await this.query(query);

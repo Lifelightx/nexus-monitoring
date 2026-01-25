@@ -36,6 +36,7 @@ import TraceWaterfall from './pages/apm/TraceWaterfall';
 import OTelMetricsDashboard from './pages/otel/OTelMetricsDashboard';
 import OTelTraceExplorer from './pages/otel/OTelTraceExplorer';
 import OTelTraceDetails from './pages/otel/OTelTraceDetails';
+import InstrumentedServices from './pages/apm/InstrumentedServices';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -122,7 +123,7 @@ function App() {
 
                   {/* APM Routes - Standalone */}
                   <Route path="/traces/:traceId/details" element={<TraceWaterfall />} />
-                  <Route path="/apm/services" element={<ServicesList />} />
+                  <Route path="/apm/services" element={<InstrumentedServices />} />
                   <Route path="/apm/traces" element={<TracesList />} />
 
                   {/* OpenTelemetry Routes */}
@@ -138,6 +139,7 @@ function App() {
 
                     {/* APM Routes - Host Specific */}
                     <Route path="services" element={<ServicesList />} />
+                    <Route path="apm" element={<ServicesList />} />
                     <Route path="services/:serviceName" element={<ServiceDetails />} />
                     <Route path="traces/:serviceId" element={<TraceExplorer />} />
                     <Route path="traces/:traceId/details" element={<TraceWaterfall />} />

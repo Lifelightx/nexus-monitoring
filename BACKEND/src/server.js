@@ -76,6 +76,7 @@ app.use('/api/alerts', require('./routes/alertRoutes'));
 // OpenTelemetry Query routes
 app.use('/api/otel', otelQueryRoutes);
 app.use('/api/logs', require('./routes/logRoutes'));
+app.use('/api/apm', require('./routes/apmRoutes')); // New APM routes (ClickHouse)
 
 app.get('/', (req, res) => {
     res.json({ message: 'Nexus Monitor API is running', docs: '/api-docs' });

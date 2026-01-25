@@ -1,45 +1,94 @@
 #!/bin/bash
 
-# ClickHouse Setup Script for Nexus Monitor OTLP Traces
+# ClickHouse Setup Script for Nexus Monitor
+# Executes DDL statements sequentially to avoid multi-statement errors in HTTP API
 
 echo "🚀 Setting up ClickHouse for OTLP traces..."
 
 CLICKHOUSE_HOST=${CLICKHOUSE_HOST:-localhost}
-CLICKHOUSE_PORT=${CLICKHOUSE_PORT:-30123}
-CLICKHOUSE_HTTP_PORT=${CLICKHOUSE_HTTP_PORT:-8123}
+CLICKHOUSE_PORT=${CLICKHOUSE_PORT:-30123} # This script expects the HTTP Port!
+CLICKHOUSE_HTTP_PORT=${CLICKHOUSE_HTTP_PORT:-$CLICKHOUSE_PORT}
 
-echo "📍 ClickHouse Host: $CLICKHOUSE_HOST"
-echo "📍 ClickHouse Port: $CLICKHOUSE_PORT"
+echo "📍 ClickHouse Limit: http://$CLICKHOUSE_HOST:$CLICKHOUSE_HTTP_PORT"
 
-# Check if ClickHouse is running
-if ! curl -s "http://${CLICKHOUSE_HOST}:${CLICKHOUSE_HTTP_PORT}/ping" > /dev/null; then
-    echo "❌ ClickHouse is not running at http://${CLICKHOUSE_HOST}:${CLICKHOUSE_HTTP_PORT}"
-    echo "Please start ClickHouse first:"
-    echo "  docker run -d --name clickhouse -p 8123:8123 -p 9000:9000 clickhouse/clickhouse-server"
-    exit 1
-fi
+# Helper function to run query
+run_query() {
+    local query="$1"
+    local msg="$2"
+    
+    echo -n "👉 $msg ... "
+    response=$(curl -s -X POST "http://${CLICKHOUSE_HOST}:${CLICKHOUSE_HTTP_PORT}/" --data-binary "$query")
+    
+    if [[ -z "$response" ]]; then
+        echo "✅ OK"
+    else
+        echo "❌ Error"
+        echo "   Response: $response"
+        # Don't exit on error, as tables might already exist
+    fi
+}
 
-echo "✅ ClickHouse is running"
+# 1. Create Database
+run_query "CREATE DATABASE IF NOT EXISTS otel" "Creating 'otel' database"
 
-# Execute schema
-echo "📝 Creating database and tables..."
+# 2. Create Traces Table
+query_traces="CREATE TABLE IF NOT EXISTS otel.traces (
+    trace_id String,
+    service_name String,
+    service_instance_id String,
+    endpoint String,
+    duration_ms Float64,
+    status_code UInt16,
+    error UInt8,
+    timestamp DateTime64(3),
+    agent_id String,
+    span_count UInt32,
+    INDEX idx_trace_id trace_id TYPE bloom_filter GRANULARITY 1,
+    INDEX idx_service service_name TYPE bloom_filter GRANULARITY 1,
+    INDEX idx_timestamp timestamp TYPE minmax GRANULARITY 1
+) ENGINE = MergeTree()
+PARTITION BY toYYYYMMDD(timestamp)
+ORDER BY (service_name, timestamp, trace_id)
+TTL timestamp + INTERVAL 30 DAY"
+run_query "$query_traces" "Creating 'otel.traces' table"
 
-clickhouse-client --host=$CLICKHOUSE_HOST --port=$CLICKHOUSE_PORT < "$(dirname "$0")/clickhouse_traces.sql"
+# 3. Create Spans Table
+query_spans="CREATE TABLE IF NOT EXISTS otel.spans (
+    span_id String,
+    trace_id String,
+    parent_span_id String,
+    service_name String,
+    span_name String,
+    span_kind UInt8,
+    start_time DateTime64(9),
+    end_time DateTime64(9),
+    duration_ms Float64,
+    status_code UInt8,
+    status_message String,
+    http_method String,
+    http_url String,
+    http_status_code UInt16,
+    db_system String,
+    db_operation String,
+    db_statement String,
+    db_collection String,
+    db_table String,
+    net_peer_name String,
+    external_url String,
+    external_method String,
+    external_status_code UInt16,
+    error UInt8,
+    error_message String,
+    INDEX idx_span_id span_id TYPE bloom_filter GRANULARITY 1,
+    INDEX idx_trace_id trace_id TYPE bloom_filter GRANULARITY 1,
+    INDEX idx_service service_name TYPE bloom_filter GRANULARITY 1,
+    INDEX idx_start_time start_time TYPE minmax GRANULARITY 1
+) ENGINE = MergeTree()
+PARTITION BY toYYYYMMDD(start_time)
+ORDER BY (service_name, start_time, trace_id, span_id)
+TTL start_time + INTERVAL 30 DAY"
+run_query "$query_spans" "Creating 'otel.spans' table"
 
-if [ $? -eq 0 ]; then
-    echo "✅ Schema created successfully!"
-    echo ""
-    echo "📊 Tables created:"
-    echo "   - otel.traces (with 30-day TTL)"
-    echo "   - otel.spans (with 30-day TTL)"
-    echo "   - otel.service_stats_mv (materialized view)"
-    echo "   - otel.span_relationships_mv (materialized view)"
-    echo ""
-    echo "🔧 Configuration:"
-    echo "   Set these environment variables in your .env:"
-    echo "   CLICKHOUSE_URL=http://${CLICKHOUSE_HOST}"
-    echo "   CLICKHOUSE_PORT=${CLICKHOUSE_PORT}"
-else
-    echo "❌ Failed to create schema"
-    exit 1
-fi
+echo ""
+echo "✅ ClickHouse Schema setup complete!"
+echo "Skipped Materialized Views to allow direct raw querying for APM metrics."

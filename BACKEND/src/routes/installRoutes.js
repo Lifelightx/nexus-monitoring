@@ -186,5 +186,35 @@ router.get('/instrumentation', (req, res) => {
     });
 });
 
+// Serve OTel Collector Config
+/**
+ * @swagger
+ * /api/install/config/otel-collector:
+ *   get:
+ *     summary: Get Host OTel Collector Configuration
+ *     tags: [Install]
+ *     responses:
+ *       200:
+ *         description: The YAML configuration
+ *         content:
+ *           text/yaml:
+ *             schema:
+ *               type: string
+ */
+router.get('/config/otel-collector', (req, res) => {
+    // Determine path to config in source tree
+    // In dev: ../../config/otel-collector-host.yaml
+    const configPath = path.join(__dirname, '../../config/otel-collector-host.yaml');
+
+    // Check if file exists
+    const fs = require('fs');
+    if (fs.existsSync(configPath)) {
+        res.setHeader('Content-Type', 'text/yaml');
+        res.sendFile(configPath);
+    } else {
+        res.status(404).json({ error: 'Config file not found in source tree' });
+    }
+});
+
 
 module.exports = router;

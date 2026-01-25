@@ -86,9 +86,78 @@ WantedBy=multi-user.target
 EOF
 
 # 5. Start Service
+# 5. Start Service
 echo "Starting agent service..."
 sudo systemctl daemon-reload
 sudo systemctl enable nexus-agent
 sudo systemctl restart nexus-agent
 
-echo "✅ Nexus Agent installed and started successfully!"
+# ---------------------------------------------------------
+# 6. Install OpenTelemetry Collector (Host)
+# ---------------------------------------------------------
+echo "---------------------------------------------------------"
+echo "Installing OpenTelemetry Collector..."
+echo "---------------------------------------------------------"
+
+OTEL_VERSION="0.93.0"
+OTEL_ARCH="amd64" # Assuming amd64 for now, script is usually run on x86 servers
+BINARY_URL="https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v${OTEL_VERSION}/otelcol-contrib_${OTEL_VERSION}_linux_${OTEL_ARCH}.tar.gz"
+OTEL_INSTALL_DIR="/opt/otel-collector"
+OTEL_CONFIG_FILE="/etc/otel-collector/config.yaml"
+OTEL_ENV_FILE="/etc/default/otel-collector"
+
+sudo mkdir -p "$OTEL_INSTALL_DIR/bin"
+sudo mkdir -p "/etc/otel-collector"
+
+# Download Binary
+echo "⬇️  Downloading otelcol-contrib v${OTEL_VERSION}..."
+sudo curl -s -L -o /tmp/otelcol.tar.gz "$BINARY_URL"
+sudo tar -xzf /tmp/otelcol.tar.gz -C "$OTEL_INSTALL_DIR/bin" otelcol-contrib
+sudo rm /tmp/otelcol.tar.gz
+sudo chmod +x "$OTEL_INSTALL_DIR/bin/otelcol-contrib"
+
+# Download Config
+echo "⬇️  Downloading collector config..."
+sudo curl -sL "$SERVER_URL/api/install/config/otel-collector" -o "$OTEL_CONFIG_FILE"
+
+# Setup Environment File
+# Use provided env vars or defaults
+CLICKHOUSE_HOST=${CLICKHOUSE_HOST:-"127.0.0.1"}
+CLICKHOUSE_PORT=${CLICKHOUSE_NATIVE_PORT:-"30900"} # Use Native Port (TCP)
+VM_HOST=${VM_HOST:-"127.0.0.1"}
+VM_PORT=${VM_PORT:-"30428"}
+
+echo "Configuring environment..."
+cat <<EOF | sudo tee "$OTEL_ENV_FILE"
+CLICKHOUSE_HOST=$CLICKHOUSE_HOST
+CLICKHOUSE_PORT=$CLICKHOUSE_PORT
+VM_HOST=$VM_HOST
+VM_PORT=$VM_PORT
+EOF
+
+# Setup Service
+echo "Setting up otel-collector service..."
+cat <<EOF | sudo tee /etc/systemd/system/otel-collector.service
+[Unit]
+Description=OpenTelemetry Collector Contrib
+After=network.target
+
+[Service]
+EnvironmentFile=$OTEL_ENV_FILE
+ExecStart=$OTEL_INSTALL_DIR/bin/otelcol-contrib --config=$OTEL_CONFIG_FILE
+Restart=always
+User=root
+# Adjust memory limit as needed
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Start Collector
+echo "Starting otel-collector service..."
+sudo systemctl daemon-reload
+sudo systemctl enable otel-collector
+sudo systemctl restart otel-collector
+
+echo "✅ Nexus Agent AND OpenTelemetry Collector installed successfully!"

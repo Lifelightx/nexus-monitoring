@@ -1,0 +1,65 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    timeout: 1s
+    send_batch_size: 1024
+  
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 1024
+    spike_limit_mib: 256
+
+  resourcedetection:
+    detectors: [system]
+    timeout: 10s
+    override: true
+
+exporters:
+  # ClickHouse Exporter - Direct to DB
+  # Note: Writes to 'otel' database, 'traces' table
+  clickhouse:
+    endpoint: tcp://${env:CLICKHOUSE_HOST}:${env:CLICKHOUSE_PORT}
+    database: otel
+    api_key: ""
+    ttl: 72h
+    traces_table_name: traces
+    logs_table_name: logs
+    timeout: 10s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+
+  # VictoriaMetrics for Metrics
+  prometheusremotewrite:
+    endpoint: http://${env:VM_HOST}:${env:VM_PORT}/api/v1/write
+    tls:
+      insecure: true
+
+  logging:
+    verbosity: detailed
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, resourcedetection, batch]
+      exporters: [clickhouse, logging]
+
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, resourcedetection, batch]
+      exporters: [prometheusremotewrite, logging]
+
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, resourcedetection, batch]
+      exporters: [clickhouse, logging]

@@ -28,9 +28,11 @@ const ServicesList = () => {
     const fetchServices = async () => {
         try {
             const token = localStorage.getItem('token');
+            // If in server context, fetch agent-specific services (Infrastructure)
+            // If global context, fetch APM stats from ClickHouse
             const endpoint = isServerContext
                 ? `${API_BASE_URL}/api/agents/${id}/services`
-                : `${API_BASE_URL}/api/otel/services`;
+                : `${API_BASE_URL}/api/apm/services`;
 
             const response = await axios.get(endpoint, {
                 headers: { Authorization: `Bearer ${token}` }
@@ -39,13 +41,8 @@ const ServicesList = () => {
             if (isServerContext) {
                 setServices(response.data || []);
             } else {
-                if (response.data.success) {
-                    const data = response.data.data.map(s => ({
-                        ...s,
-                        name: s.name || s.service_name || s.ServiceName || 'Unknown'
-                    }));
-                    setServices(data);
-                }
+                // APM Data is already formatted by controller: { name, rps, errorRate, p95Latency, ... }
+                setServices(response.data || []);
             }
         } catch (error) {
             console.error("Failed to fetch services:", error);
@@ -54,12 +51,19 @@ const ServicesList = () => {
         }
     };
 
-    // Categorize services dynamically
-    const categorizedServices = {
+    // Categorize services dynamically (Only relevant for Infrastructure view)
+    // For APM view, we just show a flat list typically, or we can group by auto-discovered tags if needed.
+    // For now, if APM view, we'll put everything in "Instrumented Services"
+    const categorizedServices = isServerContext ? {
         instrumented: services.filter(s => s.instrumentable && s.hasActiveTraces),
         instrumentable: services.filter(s => s.instrumentable && !s.hasActiveTraces),
         container: services.filter(s => !s.instrumentable && s.containerId),
         system: services.filter(s => !s.instrumentable && !s.containerId)
+    } : {
+        instrumented: services, // All APM services
+        instrumentable: [],
+        container: [],
+        system: []
     };
 
     const toggleCategory = (category) => {
@@ -73,7 +77,10 @@ const ServicesList = () => {
         if (isServerContext) {
             navigate(`/server/${id}/services/${service.name}`);
         } else {
-            navigate(`/apm/services/${service.name}`);
+            // navigate(`/apm/services/${service.name}`); 
+            // User requested trace waterfall on click, but usually you go to service details first
+            // We can navigate to trace explorer filtered by service
+            navigate(`/apm/traces?service=${service.name}`);
         }
     };
 
@@ -99,51 +106,90 @@ const ServicesList = () => {
                     </div>
                     <div>
                         <div className="font-semibold text-text-primary">{service.name}</div>
-                        <div className="text-xs mt-0.5 text-text-secondary capitalize">{service.type || 'Unknown'}</div>
+                        <div className="text-xs mt-0.5 text-text-secondary capitalize">{service.type || 'Service'}</div>
                     </div>
                 </div>
             </td>
-            <td className="p-4">
-                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${service.status === 'running'
-                        ? 'bg-green-500/10 text-green-400'
-                        : 'bg-red-500/10 text-red-400'
-                    }`}>
-                    <span className="w-1.5 h-1.5 rounded-full bg-current"></span>
-                    {service.status || 'Running'}
-                </span>
-            </td>
-            <td className="p-4 text-center">
-                <span className="text-text-primary font-medium">
-                    {service.metrics?.requestsPerMin || service.rps || 0}
-                </span>
-                <span className="text-xs text-text-secondary ml-1">req/s</span>
-            </td>
-            <td className="p-4 text-center">
-                <span className={`font-medium ${(service.metrics?.errorRate || service.errorRate || 0) > 5
-                        ? 'text-red-400'
-                        : 'text-green-400'
-                    }`}>
-                    {(service.metrics?.errorRate || service.errorRate || 0).toFixed(2)}%
-                </span>
-            </td>
-            <td className="p-4 text-center">
-                <span className="text-text-primary font-medium">
-                    {service.metrics?.p95Latency || service.p95Latency || 0}
-                </span>
-                <span className="text-xs text-text-secondary ml-1">ms</span>
-            </td>
-            <td className="p-4 text-center">
-                <span className="text-text-primary font-medium">
-                    {service.metrics?.throughput || service.throughput || 0}
-                </span>
-                <span className="text-xs text-text-secondary ml-1">ops/s</span>
-            </td>
-            <td className="p-4 text-center">
-                <span className="text-sm text-text-secondary font-mono">{service.port}</span>
-            </td>
+
+            {isServerContext ? (
+                // --- INFRASTRUCTURE COLUMNS ---
+                <>
+                    <td className="p-4">
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${service.status === 'running'
+                            ? 'bg-green-500/10 text-green-400'
+                            : 'bg-red-500/10 text-red-400'
+                            }`}>
+                            <span className="w-1.5 h-1.5 rounded-full bg-current"></span>
+                            {service.status || 'Running'}
+                        </span>
+                    </td>
+                    <td className="p-4 text-center">
+                        {/* CPU Usage (mocked or from metrics if available) */}
+                        <span className="text-text-primary font-medium">
+                            {service.cpu ? `${service.cpu.toFixed(1)}%` : '-'}
+                        </span>
+                    </td>
+                    <td className="p-4 text-center">
+                        {/* Memory Usage */}
+                        <span className="text-text-primary font-medium">
+                            {service.memory ? `${(service.memory / 1024 / 1024).toFixed(0)} MB` : '-'}
+                        </span>
+                    </td>
+                    <td className="p-4 text-center">
+                        <span className="text-sm text-text-secondary font-mono">{service.port || '-'}</span>
+                    </td>
+                </>
+            ) : (
+                // --- APM COLUMNS (Golden Signals) ---
+                <>
+                    <td className="p-4 text-center">
+                        <span className="text-text-primary font-medium">
+                            {service.rps}
+                        </span>
+                        <span className="text-xs text-text-secondary ml-1">req/s</span>
+                    </td>
+                    <td className="p-4 text-center">
+                        <span className={`font-medium ${(parseFloat(service.errorRate) > 5)
+                            ? 'text-red-400'
+                            : 'text-green-400'
+                            }`}>
+                            {service.errorRate}%
+                        </span>
+                    </td>
+                    <td className="p-4 text-center">
+                        <span className="text-text-primary font-medium">
+                            {service.p95Latency}
+                        </span>
+                        <span className="text-xs text-text-secondary ml-1">ms</span>
+                    </td>
+                    <td className="p-4 text-center">
+                        <span className="text-text-primary font-medium">
+                            {service.requestCount}
+                        </span>
+                        <span className="text-xs text-text-secondary ml-1">reqs</span>
+                    </td>
+                </>
+            )}
+
             <td className="p-4">
                 <div className="flex items-center justify-center gap-2">
-                    {service.instrumentable && service.hasActiveTraces ? (
+                    {/* Actions differ by context */}
+                    {isServerContext ? (
+                        service.instrumentable && !service.hasActiveTraces ? (
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    console.log('Setup instrumentation for', service.name);
+                                }}
+                                className="px-3 py-1.5 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 rounded text-sm font-medium flex items-center gap-1.5 transition-colors"
+                            >
+                                <AlertCircle size={12} />
+                                Setup
+                            </button>
+                        ) : (
+                            <span className="text-xs text-text-secondary">Monitored</span>
+                        )
+                    ) : (
                         <button
                             onClick={(e) => handleTracesClick(e, service)}
                             className="px-3 py-1.5 bg-accent-color/10 hover:bg-accent-color/20 text-accent-color rounded text-sm font-medium flex items-center gap-1.5 transition-colors"
@@ -151,19 +197,6 @@ const ServicesList = () => {
                             <Play size={12} />
                             Traces
                         </button>
-                    ) : service.instrumentable && !service.hasActiveTraces ? (
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                console.log('Setup instrumentation for', service.name);
-                            }}
-                            className="px-3 py-1.5 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 rounded text-sm font-medium flex items-center gap-1.5 transition-colors"
-                        >
-                            <AlertCircle size={12} />
-                            Setup
-                        </button>
-                    ) : (
-                        <span className="text-xs text-text-secondary">N/A</span>
                     )}
                 </div>
             </td>
@@ -180,14 +213,19 @@ const ServicesList = () => {
             low: 'text-blue-400 border-blue-400/30'
         };
 
+        // For APM View, use a single consistent style
+        const headerClass = isServerContext
+            ? `flex items-center justify-between p-4 bg-card-bg border ${priorityColors[priority]} rounded-t-lg cursor-pointer hover:bg-white/5 transition-colors`
+            : `flex items-center justify-between p-4 bg-card-bg border border-white/10 rounded-t-lg cursor-pointer hover:bg-white/5 transition-colors`;
+
         return (
             <div className="mb-6">
                 <div
                     onClick={() => toggleCategory(category)}
-                    className={`flex items-center justify-between p-4 bg-card-bg border ${priorityColors[priority]} rounded-t-lg cursor-pointer hover:bg-white/5 transition-colors`}
+                    className={headerClass}
                 >
                     <div className="flex items-center gap-3">
-                        <span className="text-2xl">{icon}</span>
+                        {isServerContext && <span className="text-2xl">{icon}</span>}
                         <h2 className="text-lg font-bold text-text-primary">
                             {title}
                             <span className="ml-2 text-sm font-normal text-text-secondary">({services.length})</span>
@@ -202,32 +240,31 @@ const ServicesList = () => {
                             <thead className="bg-white/5 border-b border-white/10">
                                 <tr>
                                     <th className="text-left p-4 text-sm font-semibold text-text-secondary">Service Name</th>
-                                    <th className="text-left p-4 text-sm font-semibold text-text-secondary">Status</th>
-                                    <th className="text-center p-4 text-sm font-semibold text-text-secondary">
-                                        <div className="flex items-center justify-center gap-1">
-                                            <TrendingUp size={14} />
-                                            RPS
-                                        </div>
-                                    </th>
-                                    <th className="text-center p-4 text-sm font-semibold text-text-secondary">
-                                        <div className="flex items-center justify-center gap-1">
-                                            <AlertTriangle size={14} />
-                                            Error Rate
-                                        </div>
-                                    </th>
-                                    <th className="text-center p-4 text-sm font-semibold text-text-secondary">
-                                        <div className="flex items-center justify-center gap-1">
-                                            <Clock size={14} />
-                                            P95 Latency
-                                        </div>
-                                    </th>
-                                    <th className="text-center p-4 text-sm font-semibold text-text-secondary">
-                                        <div className="flex items-center justify-center gap-1">
-                                            <Zap size={14} />
-                                            Throughput
-                                        </div>
-                                    </th>
-                                    <th className="text-center p-4 text-sm font-semibold text-text-secondary">Port</th>
+
+                                    {isServerContext ? (
+                                        <>
+                                            <th className="text-left p-4 text-sm font-semibold text-text-secondary">Status</th>
+                                            <th className="text-center p-4 text-sm font-semibold text-text-secondary">CPU</th>
+                                            <th className="text-center p-4 text-sm font-semibold text-text-secondary">Memory</th>
+                                            <th className="text-center p-4 text-sm font-semibold text-text-secondary">Port</th>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <th className="text-center p-4 text-sm font-semibold text-text-secondary">
+                                                <div className="flex items-center justify-center gap-1"><TrendingUp size={14} /> RPS</div>
+                                            </th>
+                                            <th className="text-center p-4 text-sm font-semibold text-text-secondary">
+                                                <div className="flex items-center justify-center gap-1"><AlertTriangle size={14} /> Error Rate</div>
+                                            </th>
+                                            <th className="text-center p-4 text-sm font-semibold text-text-secondary">
+                                                <div className="flex items-center justify-center gap-1"><Clock size={14} /> P95 Latency</div>
+                                            </th>
+                                            <th className="text-center p-4 text-sm font-semibold text-text-secondary">
+                                                <div className="flex items-center justify-center gap-1"><Activity size={14} /> Requests</div>
+                                            </th>
+                                        </>
+                                    )}
+
                                     <th className="text-center p-4 text-sm font-semibold text-text-secondary">Actions</th>
                                 </tr>
                             </thead>
