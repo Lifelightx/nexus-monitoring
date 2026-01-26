@@ -4,40 +4,6 @@ services:
   # TELEMETRY INFRASTRUCTURE
   # ============================================
   
-  # Redpanda - Kafka-compatible message broker
-  redpanda:
-    image: docker.redpanda.com/redpandadata/redpanda:v24.3.1
-    container_name: redpanda
-    command:
-      - redpanda
-      - start
-      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
-      - --advertise-kafka-addr internal://redpanda:9092,external://localhost:30092
-      - --pandaproxy-addr internal://0.0.0.0:8082,external://0.0.0.0:18082
-      - --advertise-pandaproxy-addr internal://redpanda:8082,external://localhost:30082
-      - --schema-registry-addr internal://0.0.0.0:8081,external://0.0.0.0:18081
-      - --rpc-addr redpanda:33145
-      - --advertise-rpc-addr redpanda:33145
-      - --mode dev-container
-      - --smp 1
-      - --default-log-level=info
-    ports:
-      - "30092:19092"  # Kafka API (external)
-      - "30081:18081"  # Schema Registry (external)
-      - "30082:18082"  # Pandaproxy (external)
-      - "30644:9644"    # Admin API
-    restart: unless-stopped
-    volumes:
-      - redpanda_data:/var/lib/redpanda/data
-    networks:
-      - nexus-network
-    healthcheck:
-      test: ["CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.+true' || exit 1"]
-      interval: 15s
-      timeout: 3s
-      retries: 5
-      start_period: 5s
-
   # ClickHouse - Traces & Logs Database
   clickhouse:
     image: clickhouse/clickhouse-server:24.1-alpine
@@ -82,30 +48,6 @@ services:
       timeout: 5s
       retries: 5
 
-  # OpenTelemetry Collector - Telemetry Pipeline
-  otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.93.0
-    container_name: otel-collector
-    command: ["--config=/etc/otel-collector-config.yaml"]
-    ports:
-      - "30317:4317"   # OTLP gRPC receiver
-      - "30318:4318"   # OTLP HTTP receiver
-      - "30888:8888"   # Prometheus metrics (collector self-monitoring)
-      - "30133:13133" # Health check
-    volumes:
-      - ./BACKEND/config/otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
-    depends_on:
-      - redpanda
-      - clickhouse
-      - victoriametrics
-    networks:
-      - nexus-network
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "localhost:13133"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   # ============================================
   # APPLICATION SERVICES
   # ============================================
@@ -136,7 +78,7 @@ services:
   #     - MONGO_URI=mongodb://mongo:27017/nexus-monitor
   #     - KAFKA_BROKERS=redpanda:9092
   #     - AGENT_TOKEN_EXPIRY=30d
-  #     - KAFKA_TOPIC_TRACES=otel_traces
+  #     - KAFKA_TOPIC_TRACES=traces
   #     - KAFKA_TOPIC_METRICS=otel_metrics
   #     - KAFKA_TOPIC_LOGS=otel_logs
   #   depends_on:
@@ -152,7 +94,7 @@ networks:
     driver: bridge
 
 volumes:
-  redpanda_data:
+  
   clickhouse_data:
   victoria_data:
   mongo_data:

@@ -15,7 +15,6 @@ const traceRoutes = require('./routes/traceRoutes');
 const socketHandler = require('./socket');
 const logger = require('./utils/logger');
 const { initializeSchedulers } = require('./services/schedulerService');
-const { getKafkaProducer } = require('./services/kafkaProducer');
 const otelQueryRoutes = require('./routes/otelQueryRoutes'); // Added OTel query routes import
 
 const seedAdminUser = require('./utils/seeder');
@@ -68,8 +67,6 @@ app.use('/api/agents', require('./routes/systemRoutes'));
 app.use('/api/metrics', require('./routes/metricRoutes'));
 app.use('/api/deploy', require('./routes/deployRoutes'));
 app.use('/api', require('./routes/services')); // APM service routes
-// OTLP Ingest routes (OpenTelemetry Protocol)
-app.use('/api/otlp/v1', require('./routes/otlpRoutes'));
 // IMPORTANT: Register settings routes BEFORE alert routes to prevent path conflicts
 app.use('/api/alerts/settings', require('./routes/alertSettingsRoutes'));
 app.use('/api/alerts', require('./routes/alertRoutes'));
@@ -93,13 +90,6 @@ server.listen(port, async () => {
     logger.info(`Server running at http://${host}:${port}`);
     logger.info(`Documentation available at http://${host}:${port}/api-docs`);
 
-    // Initialize Kafka producer
-    try {
-        const kafkaProducer = getKafkaProducer();
-        await kafkaProducer.connect();
-        logger.info('✅ Kafka producer initialized');
-    } catch (error) {
-        logger.error('❌ Failed to initialize Kafka producer:', error.message);
-        logger.warn('⚠️  OTLP ingest endpoints will attempt to reconnect on first use');
-    }
+    // ClickHouse schema initializes independently via Docker or manual SQL execution
+    logger.info('ℹ️  ClickHouse schema managed via /docker-entrypoint-initdb.d/init.sql');
 });

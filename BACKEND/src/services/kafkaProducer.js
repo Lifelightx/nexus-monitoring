@@ -19,7 +19,7 @@ class KafkaProducer {
 
         this.isConnected = false;
         this.topics = {
-            traces: process.env.KAFKA_TOPIC_TRACES || 'otel_traces',
+            traces: process.env.KAFKA_TOPIC_TRACES || 'traces',
             metrics: process.env.KAFKA_TOPIC_METRICS || 'otel_metrics',
             logs: process.env.KAFKA_TOPIC_LOGS || 'otel_logs'
         };

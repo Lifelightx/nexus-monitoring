@@ -17,7 +17,7 @@ const sdk = new opentelemetry.NodeSDK({
     }),
     traceExporter: new OTLPTraceExporter({
         // Default url is localhost:4317 for gRPC
-        url: process.env.OTEL_EXPORTER_OTLP_ENDPOINT || 'http://localhost:4317',
+        url: process.env.OTEL_EXPORTER_OTLP_ENDPOINT || 'http://localhost:30317',
     }),
     instrumentations: [getNodeAutoInstrumentations()],
 });

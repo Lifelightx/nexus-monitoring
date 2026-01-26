@@ -22,15 +22,13 @@ processors:
     override: true
 
 exporters:
-  # ClickHouse Exporter - Direct to DB
-  # Note: Writes to 'otel' database, 'traces' table
+  # ClickHouse Exporter - Standard OTLP Format
   clickhouse:
     endpoint: tcp://${env:CLICKHOUSE_HOST}:${env:CLICKHOUSE_PORT}
     database: otel
-    api_key: ""
     ttl: 72h
-    traces_table_name: traces
-    logs_table_name: logs
+    traces_table_name: otel_traces
+    logs_table_name: otel_logs
     timeout: 10s
     retry_on_failure:
       enabled: true

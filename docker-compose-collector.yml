@@ -1,0 +1,38 @@
+version: '3.8'
+
+# OTEL Collector - TESTING ONLY
+# In production, this runs as systemd service on host machine
+# Use this file ONLY for local testing/development
+
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.93.0
+    container_name: otel-collector-test
+    command: ["--config=/etc/otel-collector-host.yaml"]
+    ports:
+      - "30317:4317"   # OTLP gRPC receiver
+      - "30318:4318"   # OTLP HTTP receiver
+      - "30888:8888"   # Prometheus metrics (self-monitoring)
+      - "30133:13133" # Health check
+    environment:
+      # Connect to ClickHouse/VM on host via exposed ports
+      CLICKHOUSE_HOST: host.docker.internal  # Points to host machine
+      CLICKHOUSE_PORT: 30900                   # Exposed ClickHouse port
+      VM_HOST: host.docker.internal
+      VM_PORT: 30428
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./BACKEND/config/otel-collector-host.yaml:/etc/otel-collector-host.yaml:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "localhost:13133"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    network_mode: bridge
+
+# NOTE: This collector connects to ClickHouse/VictoriaMetrics via exposed ports
+# Start main stack first: docker-compose up -d
+# Then start collector: docker-compose -f docker-compose-collector.yml up -d

@@ -29,7 +29,6 @@ exports.getServices = async (req, res) => {
             throughput: parseFloat(s.rps || 0).toFixed(2), // Same as RPS usually for HTTP
             requestCount: s.request_count
         }));
-        console.log(serviceList);
         res.json(serviceList);
     } catch (error) {
         console.error('Error fetching APM services:', error);

@@ -17,7 +17,7 @@ async function aggregateMetrics() {
         const timeBucket = new Date(Math.floor(now.getTime() / 60000) * 60000); // Round to minute
 
         // Query ClickHouse for aggregation
-        // We group by ServiceName and SpanName (Endpoint)
+        // STANDARD OTLP SCHEMA: otel.otel_traces
         const query = `
             SELECT 
                 ServiceName as service,
@@ -27,10 +27,10 @@ async function aggregateMetrics() {
                 quantile(0.50)(Duration / 1000000) as p50_latency_ms,
                 quantile(0.95)(Duration / 1000000) as p95_latency_ms,
                 quantile(0.99)(Duration / 1000000) as p99_latency_ms,
-                countIf(StatusCode = 'Error' OR StatusCode = '2') as error_count
+                countIf(StatusCode = 'STATUS_CODE_ERROR') as error_count
             FROM otel.otel_traces
             WHERE Timestamp >= now() - INTERVAL 1 MINUTE
-            AND SpanKind = 'Server' -- Only count server spans (incoming requests)
+              AND SpanKind = 'SPAN_KIND_SERVER'
             GROUP BY ServiceName, SpanName
         `;
 

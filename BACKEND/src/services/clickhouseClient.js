@@ -187,7 +187,7 @@ class ClickHouseClient {
      * Get list of services
      */
     async getServices() {
-        // Query Standard OTel Table
+        // STANDARD OTLP SCHEMA: otel.otel_traces
         const query = `
             SELECT DISTINCT ServiceName as service_name
             FROM otel.otel_traces
@@ -202,7 +202,7 @@ class ClickHouseClient {
      * Get traces
      */
     async getTraces({ serviceName, startTime, endTime, limit = 50, minDuration, maxDuration }) {
-        // Standard OTel: Query otel.otel_traces
+        // Standard OTel: Query otel.traces
         // Select spans that are likely roots (server kind or no parent)
         // Note: Timestamp is DateTime64(9), Duration is Int64 (nanoseconds)
         let query = `
@@ -245,7 +245,7 @@ class ClickHouseClient {
      * Get trace details (all spans for a trace)
      */
     async getTraceDetails(traceId) {
-        // Standard OTel: Query otel.otel_traces
+        // Standard OTel: Query otel.traces
         const query = `
             SELECT 
                 TraceId as trace_id,
@@ -280,7 +280,7 @@ class ClickHouseClient {
      * Get service stats
      */
     async getServiceStats({ serviceName, startTime, endTime, agentId }) {
-        // Standard OTel: Aggregation on otel.otel_traces
+        // Standard OTel: Aggregation on otel.traces
         // Focusing on Server Kind spans
         let query = `
             SELECT 

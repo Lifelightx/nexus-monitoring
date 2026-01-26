@@ -33,7 +33,7 @@ exporters:
     endpoint: tcp://clickhouse:9000
     database: otel
     ttl: 72h
-    traces_table_name: otel_traces
+    traces_table_name: traces
     logs_table_name: otel_logs
     timeout: 10s
     retry_on_failure:
