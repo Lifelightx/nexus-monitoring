@@ -1,0 +1,7 @@
+/home/jeebanjyoti.mallik@apmosys.mahape/Test/agent/build/CMakeFiles/nexus-agent.dir
+/home/jeebanjyoti.mallik@apmosys.mahape/Test/agent/build/CMakeFiles/edit_cache.dir
+/home/jeebanjyoti.mallik@apmosys.mahape/Test/agent/build/CMakeFiles/rebuild_cache.dir
+/home/jeebanjyoti.mallik@apmosys.mahape/Test/agent/build/CMakeFiles/list_install_components.dir
+/home/jeebanjyoti.mallik@apmosys.mahape/Test/agent/build/CMakeFiles/install.dir
+/home/jeebanjyoti.mallik@apmosys.mahape/Test/agent/build/CMakeFiles/install/local.dir
+/home/jeebanjyoti.mallik@apmosys.mahape/Test/agent/build/CMakeFiles/install/strip.dir
