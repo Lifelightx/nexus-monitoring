@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
-
+import { API_BASE_URL } from '../config';
 const DocSection = ({ id, title, children }) => (
     <div id={id} className="mb-16 scroll-mt-32">
         <h2 className="text-3xl font-bold mb-6 text-slate-900 pb-2 border-b border-slate-200">{title}</h2>

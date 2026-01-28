@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import {API_BASE_URL} from '../../config'
 import { useParams, useNavigate } from 'react-router-dom';
 import { Activity, Clock, AlertTriangle, ArrowLeft, GitMerge, Layout, Globe, Database, ArrowRight } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 const ServiceDetails = () => {
     const { serviceName } = useParams();

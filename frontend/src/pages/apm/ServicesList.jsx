@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { API_BASE_URL } from '../../config';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Activity, CheckCircle, AlertCircle, Circle, Play, TrendingUp, AlertTriangle, Clock, Zap, ChevronDown, ChevronRight } from 'lucide-react';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 const ServicesList = () => {
     const navigate = useNavigate();
